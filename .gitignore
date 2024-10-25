@@ -1,0 +1,21 @@
+# Ignore Python cache files
+__pycache__/
+*.pyc
+
+# Ignore virtual environment directory
+venv/
+
+# Ignore IDE specific files
+.idea/
+
+# Ignore ROS bag files
+*.bag
+
+# Ignore CSV files
+*.csv
+
+# Ignore other test files
+test_load_bag.py
+test_load_bag_ros2.py
+
+ros_comm/
