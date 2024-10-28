@@ -7,59 +7,92 @@ from UR5e import UR5e_ros1
 from ag_functions import bag_to_csv, butter_lowpass_filter, total_time, match_times, flipping_data, bag_pressure, \
     pressure_time, elapsed_time, filter_force, moving_average
 
+FORCE_THRESHOLD_MAX = 5
+
+FORCE_THRESHOLD_MIN = -1.0 # Defines min value for backward difference of the force that indicates valid picking action
+# negative value = decrease in force over time
+
+PRESSURE_THRESHOLD = 700
+
 
 def picking_type_classifier(force_data, pressure):
+    """
+    Classifies the type of picking action based on force and pressure data.
 
-    i = 10
+    Parameters:
+    force_data (list or numpy array): The force measurements during the picking process.
+    pressure (list or numpy array): The pressure measurements during the picking process.
+
+    Returns:
+    tuple: A tuple containing:
+        - pick_type (int): The result of the pick (1 = 'Successful' or 0 = 'Failed').
+        - i (int): The index of the last evaluated force data point.
+    """
+
+    i = 10  # Initialize index for processing force data
+
+    # Loop while i is greater than or equal to 10
     while i >= 10:
-        idx = 0
-        cropped_force = force_data[i - 10:i]
-        filtered_force = moving_average(cropped_force)
-        cropped_pressure = pressure[i - 10:i]
-        avg_pressure = np.average(cropped_pressure)
+        idx = 0  # Initialize an index to track conditions
+        cropped_force = force_data[i - 10:i]  # Crop the last 10 force readings for analysis
+        filtered_force = moving_average(cropped_force)  # Apply moving average to the cropped force data
+        cropped_pressure = pressure[i - 10:i]  # Crop the last 10 pressure readings for analysis
+        avg_pressure = np.average(cropped_pressure)  # Calculate average pressure from the cropped data
 
-        backwards_diff = []
-        h = 2
-        for j in range(2 * h, (len(filtered_force))):
+        backwards_diff = []  # Initialize a list to store backward differences
+        h = 2  # Set the step size for backward difference calculation
+
+        # Calculate the backward difference for the filtered force data
+        for j in range(2 * h, len(filtered_force)):
             diff = ((3 * filtered_force[j]) - (4 * filtered_force[j - h]) + filtered_force[j - (2 * h)]) / (2 * h)
-            backwards_diff.append(diff)
-            j += 1
+            backwards_diff.append(diff)  # Append the calculated difference to the list
 
+        # Calculate the average of the backward differences
         cropped_backward_diff = np.average(np.array(backwards_diff))
 
-        if filtered_force[0] >= 5:
-            if float(
-                    cropped_backward_diff) <= -1.0 and avg_pressure < 700:  # this is the bitch to change if it stops working right
-                pick_type = f'Successful'
-                # print(f'Apple has been picked! Bdiff: {cropped_backward_diff}   Pressure: {avg_pressure}.\
-                # Force: {filtered_force[0]} vs. Max Force: {np.max(force)}')
-                break
+        # Check if the initial force reading is above the threshold
+        if filtered_force[0] >= FORCE_THRESHOLD_MAX:
+            # Condition for successful picking with low pressure
+            if float(cropped_backward_diff) <= FORCE_THRESHOLD_MIN and avg_pressure < PRESSURE_THRESHOLD:
+                pick_type = 1  # Mark as a successful pick
+                # Uncomment the following line for debugging output
+                # print(f'Apple has been picked! Bdiff: {cropped_backward_diff}   Pressure: {avg_pressure}. Force: {filtered_force[0]} vs. Max Force: {np.max(force)}')
+                break  # Exit the loop
 
-            elif float(cropped_backward_diff) <= -1.0 and avg_pressure >= 700:
-                pick_type = f'Failed'
+            # Condition for failed picking with high pressure
+            elif float(cropped_backward_diff) <= FORCE_THRESHOLD_MAX and avg_pressure >= PRESSURE_THRESHOLD:
+                pick_type = 0  # Mark as a failed pick
+                # Uncomment the following line for debugging output
                 # print(f'Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(force)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}')
-                break
+                break  # Exit the loop
 
-            elif float(cropped_backward_diff) > -1.0 and np.round(filtered_force[0]) >= 5:
-                idx = idx + 1
-                i = i + 1
+            # If backward difference is not sufficient, continue checking
+            elif float(cropped_backward_diff) > FORCE_THRESHOLD_MIN and np.round(filtered_force[0]) >= FORCE_THRESHOLD_MAX:
+                idx += 1  # Increment the index for successful checks
+                i += 1  # Move to the next force data point
 
         else:
+            # If the initial force reading is below the threshold
             if idx == 0:
-                i = i + 1
+                i += 1  # Just increment index if no previous successful checks
 
             else:
-                if float(cropped_backward_diff) > -1.0 and np.round(filtered_force[0]) < 5:
-                    pick_type = f'Failed'
+                # Conditions for failed picking with low force readings
+                if float(cropped_backward_diff) > FORCE_THRESHOLD_MIN and np.round(filtered_force[0]) < FORCE_THRESHOLD_MAX:
+                    pick_type = 0  # Mark as a failed pick
+                    # Uncomment the following line for debugging output
                     # print(f'Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(force)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}')
-                    break
+                    break  # Exit the loop
 
-                elif avg_pressure >= 700 and np.round(filtered_force[0]) < 5:
-                    pick_type = f'Failed'
+                # Additional condition for failed picking due to pressure
+                elif avg_pressure >= PRESSURE_THRESHOLD and np.round(filtered_force[0]) < FORCE_THRESHOLD_MAX:
+                    pick_type = 0  # Mark as a failed pick
+                    # Uncomment the following line for debugging output
                     # print(f'Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(force)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}')
-                    break
+                    break  # Exit the loop
 
-    return pick_type, i
+    return pick_type, i  # Return the type of pick and the last evaluated index
+
 
 def plot_smoothed_displacement(time, dx, idx2, turn):
     plt.plot(time, dx)
