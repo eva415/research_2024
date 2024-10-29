@@ -6,6 +6,15 @@ from scipy.signal import butter, filtfilt
 
 import rosbag
 
+# Median filter
+def filter_force_m(variables, param):
+    filtered = []
+    for i in range(len(variables)):
+        temp = median_filter(variables[i], param)
+        filtered.append(temp)
+
+    return filtered
+
 # Calculate the elapsed time relative to the first timestamp in an array
 def elapsed_time(variable, time_array):
     elapsed_t = [None] * len(variable)
