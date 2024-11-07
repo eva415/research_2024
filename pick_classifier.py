@@ -10,7 +10,7 @@ from scipy.ndimage import median_filter
 
 from UR5e import UR5e_ros1
 from ag_functions import bag_to_csv, butter_lowpass_filter, total_time, match_times, flipping_data, bag_pressure, \
-    pressure_time, elapsed_time, filter_force, moving_average, db3_to_csv_f, db3_to_csv_p, total_time, elapsed_time
+    pressure_time, elapsed_time, filter_force, moving_average, db3_to_csv_f, db3_to_csv_p, db3_to_csv_x, total_time, elapsed_time
 from matplotlib.backends.backend_pdf import PdfPages
 
 # Butterworth filter requirements
@@ -30,13 +30,13 @@ FORCE_THRESHOLD = 5
 INDEX_OG = 500 # originally, olivia had the index number set to 500
 PDF_TITLE = "pick_classifier_all_idx500_nov7.pdf"
 
-# Given force and pressure data, determine if pick occurred (cb)
+# YAY Given force and pressure data, determine if pick occurred (cb)
 def pick_analysis_callback(force_data, pressure_data, flag):
     if len(force_data) < 9:
         print(f"Force array is of length {len(force_data)}")
         return 2
-    else:
-        print(f"YAY, Force array is of length {len(force_data)}")
+    # else:
+        # print(f"YAY, Force array is of length {len(force_data)}")
     filtered_force = moving_average(force_data)
     avg_pressure = np.average(pressure_data)
     backwards_diff = []
@@ -83,7 +83,7 @@ def pick_analysis_callback(force_data, pressure_data, flag):
         print("Failed to identify pick type...")
         return 2
 
-# Function to create final plots
+# YAY Function to create final plots
 def create_nforce_distance_num_deriv_plots(cropped_f, x_part, cropped_low_bdiff, cropped_p, i, number,
                                            attempt, type, general_time, actual):
     fig, ax = plt.subplots(3, 1, figsize=(10, 30))  # Change to 3 rows
@@ -114,7 +114,7 @@ def create_nforce_distance_num_deriv_plots(cropped_f, x_part, cropped_low_bdiff,
     return fig
     # plt.show()
 
-# Plot confusion matrix with final counts
+# YAY Plot confusion matrix with final counts
 def make_confusion_matrix(pos_pos, neg_neg, pos_neg, neg_pos):
     # Define the confusion matrix data
     matrix = np.array([[pos_pos, pos_neg],
@@ -283,7 +283,7 @@ def DEAL_WITH_THIS_LATER():
     p.close()
 
 
-def plot_array(array, time_array=None, xlabel="Time", ylabel="Force", show=True):
+def plot_array(array, time_array=None, xlabel="Time (s)", ylabel="Force", show=True):
     # If no time array is provided, use the indices of the force_array as time
     if time_array is None:
         time_array = np.arange(len(array))
@@ -305,57 +305,99 @@ def plot_array(array, time_array=None, xlabel="Time", ylabel="Force", show=True)
     # Show the plot
     if show:
         plt.show()
-
-def new_try():
-    flag = False  # reset every new pick analysis
-    os.chdir(DIRECTORY) # go to desired directory with bag files
-
-    # retrieve force data from db3 file folder
-    file = db3_to_csv_f("pressure_servo_20241023_115446.db3")
-    data_f = np.loadtxt('./' + file + '.csv', dtype="float", delimiter=',')
+def return_force_array(filename):
+    # FUNCTION TO RETRIEVE FORCE DATA, NORMALIZE
+    # retrieve FORCE data from db3 file folder
+    file_f = db3_to_csv_f(filename)
+    data_f = np.loadtxt('./' + file_f + '.csv', dtype="float", delimiter=',')
 
     # get seconds and nanoseconds, process for total and elapsed time
-    raw_sec_array = data_f[:, -1]
-    raw_nsec_array = data_f[:, -2]
-    total_time_force = total_time(raw_sec_array, raw_nsec_array)
+    raw_sec_array_f = data_f[:, -1]
+    raw_nsec_array_f = data_f[:, -2]
+    total_time_force = total_time(raw_sec_array_f, raw_nsec_array_f)
     elapsed_time_force = elapsed_time(total_time_force)
 
     # get array of raw force data and normalize it
     raw_force_array = data_f[:, :-2]
     norm_force_array = np.linalg.norm(raw_force_array, axis=1)
-
-
-    # retrieve pressure data from db3 file folder
-    file = db3_to_csv_p("pressure_servo_20241023_115446.db3")
-    data_p = np.loadtxt('./' + file + '.csv', dtype="float", delimiter=',')
+    return norm_force_array, elapsed_time_force
+def return_pressure_array(filename):
+    # FUNCTION TO RETRIEVE PRESSURE DATA, NORMALIZE
+    # retrieve PRESSURE data from db3 file folder
+    file_p = db3_to_csv_p(filename)
+    data_p = np.loadtxt('./' + file_p + '.csv', dtype="float", delimiter=',')
 
     # get seconds and nanoseconds, process for total and elapsed time
-    raw_sec_array = data_p[:, -1]
-    raw_nsec_array = data_p[:, -2]
-    total_time_pressure = total_time(raw_sec_array, raw_nsec_array)
-    elapsed_time_pressure = elapsed_time(total_time_force)
+    raw_sec_array_p = data_p[:, -1]
+    raw_nsec_array_p = data_p[:, -2]
+    total_time_pressure = total_time(raw_sec_array_p, raw_nsec_array_p)
+    elapsed_time_pressure = elapsed_time(total_time_pressure)
 
     # get array of raw force data and normalize it
     raw_pressure_array = data_p[:, :-2]
     norm_pressure_array = np.linalg.norm(raw_pressure_array, axis=1)
 
+    return norm_pressure_array, elapsed_time_pressure
+
+
+def new_try():
+    flag = False  # reset every new pick analysis
+    os.chdir(DIRECTORY) # go to desired directory with bag files
+
+    norm_force, elapsed_time_f = return_force_array("pressure_servo_20241023_115446.db3")
+    norm_pressure, elapsed_time_p = return_pressure_array("pressure_servo_20241023_115446.db3")
+
+    # # FUNCTION TO RETRIEVE POSITION DATA
+    # file_p = db3_to_csv_x("pick_controller_20241023_115455.db3")
+    # data_p = np.loadtxt('./' + file_p + '.csv', dtype="float", delimiter=',')
+    #
+    # # get seconds and nanoseconds, process for total and elapsed time
+    # raw_sec_array_x = data_p[:, -1]
+    # raw_nsec_array_x = data_p[:, -2]
+    # total_time_x_pos = total_time(raw_sec_array_x, raw_nsec_array_x)
+    # elapsed_time_x_pos = elapsed_time(total_time_x_pos)
+    #
+    # # get array of raw x position data and normalize it
+    # raw_x_pos_array = data_p[:, :-2]
+    # delta_x_pos = np.diff(raw_x_pos_array)
+
+    # MATCH TIMES FOR FORCE AND PRESSURE
+
+    # # MATCH THE TIME AXES OF FORCE AND PRESSURE
+    # print(f"elapsed_time_force: {len(elapsed_time_f)}, elapsed_time_pressure: {len(elapsed_time_p)}")
+    # print(f"norm_force_array: {len(norm_force)}, norm_pressure_array: {len(norm_pressure)}")
+    # match_times(elapsed_time_f, elapsed_time_p, norm_force, norm_pressure)
+
     # TEST PLOTS, REMOVE LATER
-    plot_array(raw_pressure_array, ylabel="Raw Pressure")
-    plot_array(norm_pressure_array, ylabel="Norm Pressure")
-    plot_array(raw_pressure_array, time_array=elapsed_time_pressure, ylabel="Raw Pressure")
-    plot_array(norm_pressure_array, time_array=elapsed_time_pressure, ylabel="Norm Pressure")
+    # plot_array(raw_x_pos_array, ylabel="Raw X Position")
+    # plot_array(norm_force, ylabel="Norm Force")
+    # plot_array(norm_force, time_array=elapsed_time_f, ylabel="Norm Force")
+    # plot_array(norm_pressure, ylabel="Norm Pressure")
+    # plot_array(norm_pressure, time_array=elapsed_time_p, ylabel="Norm Pressure")
+    # plot_array(raw_pressure_array, time_array=elapsed_time_pressure, ylabel="Raw Pressure")
 
-    # FUNCTION TO RETRIEVE PRESSURE DATA, NORMALIZE
+    # plot_array(raw_force_array, time_array=elapsed_time_force, ylabel="Raw Force")
 
-    # FUNCTION TO RETRIEVE POSITION DATA
+    # ADD LOOPING LOGIC TO GO THROUGH DIRECTORY (ONCE I HAVE DIRECTORY STRUCTURE I CAN USE CODE IN OLIVIA_MAIN FUNCTION
+    # IN OLIVIA_FUNCTIONS.PY
 
+    # LOOP THROUGH FORCE AND PRESSURE DATA FOR EACH FILE
+    print(f"norm_force length: {len(norm_force)}")
+    print(f"norm_pressure length: {len(norm_pressure)}")
+    min_length = min([len(norm_force), len(norm_pressure)])
+    print(f"min_length length: {min_length}\n")
 
+    # loop through pressure and force data of pick until out of bounds
+    i = 0
+    result = 2
+    while (i+9) < min_length and (not result == 1) and (not result == 0):
+        result = pick_analysis_callback(norm_force[i:i+9], norm_pressure[i:i+9], flag)
+        i = i + 9
+    print(f"at index: {i-9}, result was {result}")
 
-
-    force = [6, 6, 6, 6, 6, 6, 6, 6, 6]
-    pressure = [750, 750, 750, 750, 750, 750, 750, 750, 750, 750]
-    num = pick_analysis_callback(force, pressure, flag) # NEED AT LEAST 9 DATA POINTS FOR THIS FUNCTION TO WORK
-    print(num) # 0 if failed pick, 1 if successful pick, 2 if unable to identify
+    # force = [6, 6, 6, 6, 6, 6, 6, 6, 6]
+    # pressure = [750, 750, 750, 750, 750, 750, 750, 750, 750, 750]
+    # num = pick_analysis_callback(force, pressure, flag) # NEED AT LEAST 9 DATA POINTS FOR THIS FUNCTION TO WORK
 
 if __name__ == '__main__':
     new_try()

@@ -126,13 +126,13 @@ tot_time = total_time(time, ntime)
 etime_force = elapsed_time(tot_time, tot_time)
 
 # displacement time baby
-path = UR5e_ros1(0, name)
-total_disp = path.z
-joint_times_sec = path.times_seconds
-joint_times_nsec = path.times_nseconds
+# path = UR5e_ros1(0, name)
+# total_disp = path.z
+# joint_times_sec = path.times_seconds
+# joint_times_nsec = path.times_nseconds
 
-tot_time_j = total_time(joint_times_sec, joint_times_nsec)
-etime_joint = elapsed_time(tot_time_j, tot_time_j)
+# tot_time_j = total_time(joint_times_sec, joint_times_nsec)
+# etime_joint = elapsed_time(tot_time_j, tot_time_j)
 
 pressure_array = bag_pressure(file)
 p_arr = np.linalg.norm(pressure_array, axis=1)
@@ -140,7 +140,7 @@ p_arr = np.linalg.norm(pressure_array, axis=1)
 etimes_pressure = pressure_time(file)
 
 f_arr_col = f_arr[..., None]
-total_disp_col = np.array(total_disp)[..., None]
+# total_disp_col = np.array(total_disp)[..., None]
 p_arr_col = p_arr[..., None]
 
 final_force, delta_x, general_time = match_times(etime_force, etime_joint, f_arr_col, total_disp_col)

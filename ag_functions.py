@@ -202,7 +202,7 @@ def pressure_time(file):
 def db3_to_csv_f(folder_name):
     # Convert folder_name to a string to use as the base file name
     name = str(folder_name)
-    print(name)
+    # print(name)
     # Initialize an empty list to store data from each message
     df = []
 
@@ -246,7 +246,7 @@ def db3_to_csv_f(folder_name):
 def db3_to_csv_p(folder_name):
     # Convert folder_name to a string to use as the base file name
     name = str(folder_name)
-    print(name)
+    # print(name)
     # Initialize an empty list to store data from each message
     df = []
 
@@ -265,11 +265,11 @@ def db3_to_csv_p(folder_name):
                 Pz = msg.data[2]
 
                 # Extract timestamp (seconds and nanoseconds) from message header
-                # secs = msg.header.stamp.sec
-                # nsecs = msg.header.stamp.nanosec
+                secs = int(timestamp // 1e9)
+                nsecs = int(timestamp % 1e9)
 
                 # Compile extracted data into a list
-                new_values = [Px, Py, Pz]
+                new_values = [Px, Py, Pz, secs, nsecs]
                 # Append this list to the main data list
                 df.append(new_values)
 
@@ -283,6 +283,48 @@ def db3_to_csv_p(folder_name):
 
     # Return the folder name as a confirmation of successful save
     return name + 'pressure'
+
+# Reads a .db3 ros2 bag file and extracts relevant position data to a csv file
+# NOT IN PICK_CLASSIFIER.PY
+def db3_to_csv_x(folder_name):
+    # Convert folder_name to a string to use as the base file name
+    name = str(folder_name)
+    # print(name)
+    # Initialize an empty list to store data from each message
+    df = []
+
+    # Pass the folder name containing the metadata.yaml file to Reader
+    with Reader(name) as reader:
+        # Iterate over each message in the bag file
+        for connection, timestamp, rawdata in reader.messages():
+            # Check if the message is from the wrench topic (force-torque sensor)
+            if connection.topic == '/tool_pose':
+                # Deserialize the message data using CDR (Common Data Representation) format
+                msg = deserialize_cdr(rawdata, connection.msgtype)
+                # Extract force components along x, y, and z axes
+                x_pos = msg.transform.translation.x
+
+                # Extract timestamp (seconds and nanoseconds) from message header
+                secs = int(timestamp // 1e9)
+                nsecs = int(timestamp % 1e9)
+
+                # Compile extracted data into a list
+                new_values = [x_pos, secs, nsecs]
+                # Append this list to the main data list
+                df.append(new_values)
+                print(new_values)
+
+    # Check if data was collected before attempting to save to CSV
+    if df:
+        # Save the accumulated data to a CSV file using the provided folder_name as the file name
+        # print(df)
+        np.savetxt(name + 'x_pos.csv', np.array(df), delimiter=",")
+    else:
+        print("No data found in the specified topic.")
+
+    # Return the folder name as a confirmation of successful save
+    return name + 'x_pos'
+
 
 # Applies a median filter to each variable --> noise reduction
 def filter_force(variables, param):
