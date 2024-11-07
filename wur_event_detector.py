@@ -14,7 +14,7 @@ class EventDetector(Node):
 
         super().__init__('event_detector')
         self.cbgroup = ReentrantCallbackGroup()
-        self.stop_controller_cli = self.create_client(Empty, 'stop_controller', callback_group=self.cbgroup) # WHAT IS CLI?
+        self.stop_controller_cli = self.create_client(Empty, 'stop_controller', callback_group=self.cbgroup)
         self.stop_controller_pull_twist = self.create_client(Empty, 'pull_twist/stop_controller')
         self.wait_for_srv(self.stop_controller_cli)
         self.wait_for_srv(self.stop_controller_pull_twist)

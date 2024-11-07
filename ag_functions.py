@@ -6,6 +6,28 @@ from scipy.signal import butter, filtfilt
 
 import rosbag
 
+
+def filter_force(variables, param):
+    # Median Filter
+    filtered = []
+    for i in range(len(variables)):
+        temp = median_filter(variables[i], param)
+        filtered.append(temp)
+
+    return filtered
+
+def moving_average(final_force):
+    window_size = 5
+    i = 0
+    filtered = []
+
+    while i < len(final_force) - window_size + 1:
+        window_average = round(np.sum(final_force[i:i + window_size]) / window_size, 2)
+        filtered.append(window_average)
+        i += 1
+
+    return filtered
+
 # Median filter
 def filter_force_m(variables, param):
     filtered = []
@@ -16,9 +38,9 @@ def filter_force_m(variables, param):
     return filtered
 
 # Calculate the elapsed time relative to the first timestamp in an array
-def elapsed_time(variable, time_array):
-    elapsed_t = [None] * len(variable)
-    for i in range(len(variable)):
+def elapsed_time(time_array):
+    elapsed_t = [None] * len(time_array)
+    for i in range(len(time_array)):
         elapsed_t[i] = (time_array[i] - time_array[0])  # Calculate difference from first time entry
     return elapsed_t
 
@@ -180,11 +202,12 @@ def pressure_time(file):
 def db3_to_csv_f(folder_name):
     # Convert folder_name to a string to use as the base file name
     name = str(folder_name)
+    print(name)
     # Initialize an empty list to store data from each message
     df = []
 
-    # Create a reader instance to open the `.db3` file for reading
-    with Reader('./' + name) as reader:
+    # Pass the folder name containing the metadata.yaml file to Reader
+    with Reader(name) as reader:
         # Iterate over each message in the bag file
         for connection, timestamp, rawdata in reader.messages():
             # Check if the message is from the wrench topic (force-torque sensor)
@@ -198,75 +221,68 @@ def db3_to_csv_f(folder_name):
                 Fz = msg.wrench.force.z
 
                 # Extract timestamp (seconds and nanoseconds) from message header
-                nsecs = msg.header.stamp.nanosec
                 secs = msg.header.stamp.sec
+                nsecs = msg.header.stamp.nanosec
 
                 # Compile extracted data into a list
-                new_values = [Fx, Fy, Fz, nsecs, secs]
+                new_values = [Fx, Fy, Fz, secs, nsecs]
                 # Append this list to the main data list
                 df.append(new_values)
 
-    # Save the accumulated data to a CSV file using the provided folder_name as the file name
-    np.savetxt(folder_name + '.csv', df, delimiter=",")
+    # Check if data was collected before attempting to save to CSV
+    if df:
+        # Save the accumulated data to a CSV file using the provided folder_name as the file name
+        # print(df)
+        np.savetxt(name + 'force.csv', np.array(df), delimiter=",")
+    else:
+        print("No data found in the specified topic.")
 
     # Return the folder name as a confirmation of successful save
-    return folder_name
+    return name + 'force'
+
 
 # Reads a .db3 ros2 bag file and extracts relevant pressure data to a csv file
 # NOT IN PICK_CLASSIFIER.PY
 def db3_to_csv_p(folder_name):
-    # Convert folder_name to a string for use as the file name
+    # Convert folder_name to a string to use as the base file name
     name = str(folder_name)
+    print(name)
+    # Initialize an empty list to store data from each message
+    df = []
 
-    # Initialize lists to store pressure data from three different sensors
-    pressure1 = []
-    pressure2 = []
-    pressure3 = []
-    pressure = []
-
-    # Define the topics corresponding to the pressure sensors
-    topic1 = '/gripper/pressure/sc1'
-    topic2 = '/gripper/pressure/sc2'
-    topic3 = '/gripper/pressure/sc3'
-
-    # Create a reader instance to open the `.db3` file for reading
-    with Reader('./' + name) as reader:
-        # Iterate over messages in the bag file
+    # Pass the folder name containing the metadata.yaml file to Reader
+    with Reader(name) as reader:
+        # Iterate over each message in the bag file
         for connection, timestamp, rawdata in reader.messages():
-            # Check if the message is from the first pressure sensor topic
-            if connection.topic == topic1:
-                # Deserialize the message data using CDR format
+            # Check if the message is from the wrench topic (force-torque sensor)
+            if connection.topic == '/gripper/pressure':
+                # Deserialize the message data using CDR (Common Data Representation) format
                 msg = deserialize_cdr(rawdata, connection.msgtype)
-                # Extract the pressure data and append it to pressure1 list
-                P1 = msg.data
-                pressure1.append(P1)
 
-            # Check if the message is from the second pressure sensor topic
-            if connection.topic == topic2:
-                # Deserialize the message data
-                msg = deserialize_cdr(rawdata, connection.msgtype)
-                # Extract the pressure data and append it to pressure2 list
-                P2 = msg.data
-                pressure2.append(P2)
+                # Extract force components along x, y, and z axes
+                Px = msg.data[0]
+                Py = msg.data[1]
+                Pz = msg.data[2]
 
-            # Check if the message is from the third pressure sensor topic
-            if connection.topic == topic3:
-                # Deserialize the message data
-                msg = deserialize_cdr(rawdata, connection.msgtype)
-                # Extract the pressure data and append it to pressure3 list
-                P3 = msg.data
-                pressure3.append(P3)
+                # Extract timestamp (seconds and nanoseconds) from message header
+                # secs = msg.header.stamp.sec
+                # nsecs = msg.header.stamp.nanosec
 
-    # Combine the three pressure sensor data into a single list of lists
-    for i in range(len(pressure1)):
-        new_pressure = [pressure1[i], pressure2[i], pressure3[i]]
-        pressure.append(new_pressure)
+                # Compile extracted data into a list
+                new_values = [Px, Py, Pz]
+                # Append this list to the main data list
+                df.append(new_values)
 
-    # Save the pressure data to a CSV file
-    np.savetxt(folder_name + '_pressure.csv', pressure, delimiter=",")
+    # Check if data was collected before attempting to save to CSV
+    if df:
+        # Save the accumulated data to a CSV file using the provided folder_name as the file name
+        # print(df)
+        np.savetxt(name + 'pressure.csv', np.array(df), delimiter=",")
+    else:
+        print("No data found in the specified topic.")
 
-    # Return the folder name as confirmation
-    return folder_name
+    # Return the folder name as a confirmation of successful save
+    return name + 'pressure'
 
 # Applies a median filter to each variable --> noise reduction
 def filter_force(variables, param):
