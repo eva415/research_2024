@@ -1,9 +1,8 @@
 import numpy as np
 from rosbags.rosbag2 import Reader
 from rosbags.serde import deserialize_cdr
-from scipy.ndimage import median_filter, gaussian_filter
+from scipy.ndimage import median_filter
 from scipy.signal import butter, filtfilt
-
 import rosbag
 
 
@@ -283,6 +282,7 @@ def db3_to_csv_p(folder_name):
 
     # Return the folder name as a confirmation of successful save
     return name + 'pressure'
+
 
 # Reads a .db3 ros2 bag file and extracts relevant position data to a csv file
 # NOT IN PICK_CLASSIFIER.PY
