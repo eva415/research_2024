@@ -38,18 +38,34 @@ def filter_force_m(variables, param):
 
 # Calculate the elapsed time relative to the first timestamp in an array
 def elapsed_time(time_array):
-    elapsed_t = [None] * len(time_array)
-    for i in range(len(time_array)):
-        elapsed_t[i] = (time_array[i] - time_array[0])  # Calculate difference from first time entry
-    return elapsed_t
+    # Convert to a NumPy array if it's not already (in case a list is passed)
+    time_array = np.array(time_array)
 
+    # Check if time_array is not empty
+    if time_array.size == 0:
+        print("Error: time_array is empty.")
+        return None
+
+    # Subtract the first entry from each element (vectorized operation)
+    elapsed_t = time_array - time_array[0]
+
+    # Optionally print for debugging
+    print(f"elapsed_time: {elapsed_t}")
+
+    return elapsed_t
 # Combine seconds and nanoseconds arrays into a single timestamp in seconds
 def total_time(seconds, nseconds):
-    time = []
-    for i in range(len(seconds)):
-        total = seconds[i] + (nseconds[i] / 1000000000)  # Convert nanoseconds to seconds and add to seconds
-        time.append(total)
-    return time
+    # Convert seconds and nanoseconds to total time in seconds using vectorized operations
+    seconds = np.array(seconds, dtype=np.float64)
+    nseconds = np.array(nseconds, dtype=np.float64)
+
+    # Convert nanoseconds to seconds and add to seconds
+    total = seconds + (nseconds / 1e9)
+
+    # Optionally print for debugging
+    print(f"total_time: {total}")
+
+    return total
 
 # Convert ROS bag file data to CSV format with specific topic data extraction
 def bag_to_csv(i):
@@ -210,7 +226,7 @@ def db3_to_csv_f(folder_name):
         # Iterate over each message in the bag file
         for connection, timestamp, rawdata in reader.messages():
             # Check if the message is from the wrench topic (force-torque sensor)
-            if connection.topic == '/force_torque_sensor_broadcaster/wrench':
+            if connection.topic == '/ft300_wrench':
                 # Deserialize the message data using CDR (Common Data Representation) format
                 msg = deserialize_cdr(rawdata, connection.msgtype)
 
@@ -254,14 +270,14 @@ def db3_to_csv_p(folder_name):
         # Iterate over each message in the bag file
         for connection, timestamp, rawdata in reader.messages():
             # Check if the message is from the wrench topic (force-torque sensor)
-            if connection.topic == '/gripper/pressure':
+            if connection.topic == '/sensordata':
                 # Deserialize the message data using CDR (Common Data Representation) format
                 msg = deserialize_cdr(rawdata, connection.msgtype)
 
                 # Extract force components along x, y, and z axes
-                Px = msg.data[0]
-                Py = msg.data[1]
-                Pz = msg.data[2]
+                Px = msg
+                Py = msg
+                Pz = msg
 
                 # Extract timestamp (seconds and nanoseconds) from message header
                 secs = int(timestamp // 1e9)
@@ -275,7 +291,7 @@ def db3_to_csv_p(folder_name):
     # Check if data was collected before attempting to save to CSV
     if df:
         # Save the accumulated data to a CSV file using the provided folder_name as the file name
-        # print(df)
+        print(df)
         np.savetxt(name + 'pressure.csv', np.array(df), delimiter=",")
     else:
         print("No data found in the specified topic.")

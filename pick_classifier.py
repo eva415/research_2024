@@ -301,15 +301,18 @@ def return_force_array(filename):
     data_f = np.loadtxt('./' + file_f + '.csv', dtype="float", delimiter=',')
 
     # get seconds and nanoseconds, process for total and elapsed time
-    raw_sec_array_f = data_f[:, -1]
-    raw_nsec_array_f = data_f[:, -2]
+    raw_sec_array_f = data_f[:, -2]
+    raw_nsec_array_f = data_f[:, -1]
     total_time_force = total_time(raw_sec_array_f, raw_nsec_array_f)
     elapsed_time_force = elapsed_time(total_time_force)
+    # print(f"elapsed_time_force: {elapsed_time_force}")
 
     # get array of raw force data and normalize it
     raw_force_array = data_f[:, :-2]
     norm_force_array = np.linalg.norm(raw_force_array, axis=1)
     return norm_force_array, elapsed_time_force
+
+
 def return_pressure_array(filename):
     # FUNCTION TO RETRIEVE PRESSURE DATA, NORMALIZE
     # retrieve PRESSURE data from db3 file folder
@@ -333,8 +336,8 @@ def new_try():
     flag = False  # reset every new pick analysis
     os.chdir(DIRECTORY) # go to desired directory with bag files
 
-    norm_force, elapsed_time_f = return_force_array("rosbag2_2024_09_20-11_39_45")
-    norm_pressure, elapsed_time_p = return_pressure_array("rosbag2_2024_09_20-11_39_45")
+    norm_force, elapsed_time_f = return_force_array("rosbag2_2024_09_20-11_39_45_0.db3")
+    # norm_pressure, elapsed_time_p = return_pressure_array("rosbag2_2024_09_19-15_12_23_0.db3")
 
     # # FUNCTION TO RETRIEVE POSITION DATA
     # file_p = db3_to_csv_x("pick_controller_20241023_115455.db3")
@@ -353,25 +356,25 @@ def new_try():
     # MATCH TIMES FOR FORCE AND PRESSURE
 
     # # MATCH THE TIME AXES OF FORCE AND PRESSURE
-    print(f"elapsed_time_force: {len(elapsed_time_f)}, elapsed_time_pressure: {len(elapsed_time_p)}")
-    print(f"norm_force_array: {len(norm_force)}, norm_pressure_array: {len(norm_pressure)}")
-    match_times(elapsed_time_f, elapsed_time_p, norm_force, norm_pressure)
+    # print(f"elapsed_time_force: {len(elapsed_time_f)}, elapsed_time_pressure: {len(elapsed_time_p)}")
+    # print(f"norm_force_array: {len(norm_force)}, norm_pressure_array: {len(norm_pressure)}")
+    # match_times(elapsed_time_f, elapsed_time_p, norm_force, norm_pressure)
 
     # ADD LOOPING LOGIC TO GO THROUGH DIRECTORY (ONCE I HAVE DIRECTORY STRUCTURE I CAN USE CODE IN OLIVIA_MAIN FUNCTION
     # IN OLIVIA_FUNCTIONS.PY
 
     # LOOP THROUGH FORCE AND PRESSURE DATA FOR EACH FILE
     print(f"norm_force length: {len(norm_force)}")
-    print(f"norm_pressure length: {len(norm_pressure)}")
-    min_length = min([len(norm_force), len(norm_pressure)])
-    print(f"min_length length: {min_length}\n")
+    # print(f"norm_pressure length: {len(norm_pressure)}")
+    # min_length = min([len(norm_force), len(norm_pressure)])
+    # print(f"min_length length: {min_length}\n")
 
     # loop through pressure and force data of pick until out of bounds
     i = 0
     result = 2
-    while (i+9) < min_length and (not result == 1) and (not result == 0):
-        result = pick_analysis_callback(norm_force[i:i+9], norm_pressure[i:i+9], flag)
-        i = i + 9
+    # while (i+9) < min_length and (not result == 1) and (not result == 0):
+    #     result = pick_analysis_callback(norm_force[i:i+9], norm_pressure[i:i+9], flag)
+    #     i = i + 9
 
     if result == 0:
         print(f"At index: {i - 9}, pick classification was failed pick")
@@ -391,18 +394,19 @@ def new_try():
     # plot_array(norm_pressure, ylabel="Norm Pressure")
     # plot_array(norm_pressure, time_array=elapsed_time_p, ylabel="Norm Pressure")
     # plot_array(raw_pressure_array, time_array=elapsed_time_pressure, ylabel="Raw Pressure")
-    # plot_array(raw_force_array, time_array=elapsed_time_force, ylabel="Raw Force")
+    # plot_array(norm_force, time_array=elapsed_time_f, ylabel="Testing time")
 
-    time = np.arange(len(norm_pressure))  # Make sure time matches norm_force length
+
+    time = elapsed_time_f  # Make sure time matches norm_force length
 
     # Create a single plot
     plt.figure(figsize=(10, 5))  # Adjust the size as needed
 
-    # Plot Norm(Pressure) vs. Distance Traveled
-    plt.plot(time, norm_pressure)
+    # Plot Norm(Force) vs. Distance Traveled
+    plt.plot(time, norm_force)
     plt.axvline(time[i], color='r', label=f'Time {i}')  # Red line at index i
-    plt.title('Norm(Pressure) vs. Distance Traveled')
-    plt.xlabel('Displacement (m)')
+    plt.title('Norm(Force) vs. Time')
+    plt.xlabel('Time ()')
     plt.ylabel('Norm(Force) (N)')
     plt.legend()  # Show legend for the vertical line
     plt.show()
