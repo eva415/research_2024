@@ -2,7 +2,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
-from ag_functions import match_times, moving_average, db3_to_csv_f, db3_to_csv_p, total_time, elapsed_time
+from ag_functions import match_times, moving_average, db3_to_csv_f, db3_to_csv_p, db3_to_csv_x, total_time, elapsed_time
 
 # Butterworth filter requirements
 FS = 500.0  # sample rate, Hz
@@ -311,8 +311,6 @@ def return_force_array(filename):
     raw_force_array = data_f[:, :-2]
     norm_force_array = np.linalg.norm(raw_force_array, axis=1)
     return norm_force_array, elapsed_time_force
-
-
 def return_pressure_array(filename):
     # FUNCTION TO RETRIEVE PRESSURE DATA, NORMALIZE
     # retrieve PRESSURE data from db3 file folder
@@ -330,28 +328,30 @@ def return_pressure_array(filename):
     norm_pressure_array = np.linalg.norm(raw_pressure_array, axis=1)
 
     return norm_pressure_array, elapsed_time_pressure
+def return_position_array(filename):
+    # retrieve POS data from db3 file folder
+    file_pos = db3_to_csv_x(filename)
+    data_pos = np.loadtxt('./' + file_pos + '.csv', dtype="float", delimiter=',')
 
+    # get seconds and nanoseconds, process for total and elapsed time
+    raw_sec_array_pos = data_pos[:, -2]
+    raw_nsec_array_pos = data_pos[:, -1]
+    total_time_pos = total_time(raw_sec_array_pos, raw_nsec_array_pos)
+    elapsed_time_pos = elapsed_time(total_time_pos)
+
+    # get array of raw force data and normalize it
+    raw_pos_array = data_pos[:, :-2]
+    norm_pos_array = np.linalg.norm(raw_pos_array, axis=1)
+    return norm_pos_array, elapsed_time_pos
 
 def new_try():
     flag = False  # reset every new pick analysis
     os.chdir(DIRECTORY) # go to desired directory with bag files
 
-    norm_force, elapsed_time_f = return_force_array("rosbag2_2024_09_20-11_39_45_0.db3")
+    # norm_force, elapsed_time_f = return_force_array("rosbag2_2024_09_20-11_39_45_0.db3")
     # norm_pressure, elapsed_time_p = return_pressure_array("rosbag2_2024_09_19-15_12_23_0.db3")
+    norm_position, elapsed_time_pos = return_position_array("rosbag2_2024_09_20-11_39_45_0.db3")
 
-    # # FUNCTION TO RETRIEVE POSITION DATA
-    # file_p = db3_to_csv_x("pick_controller_20241023_115455.db3")
-    # data_p = np.loadtxt('./' + file_p + '.csv', dtype="float", delimiter=',')
-    #
-    # # get seconds and nanoseconds, process for total and elapsed time
-    # raw_sec_array_x = data_p[:, -1]
-    # raw_nsec_array_x = data_p[:, -2]
-    # total_time_x_pos = total_time(raw_sec_array_x, raw_nsec_array_x)
-    # elapsed_time_x_pos = elapsed_time(total_time_x_pos)
-    #
-    # # get array of raw x position data and normalize it
-    # raw_x_pos_array = data_p[:, :-2]
-    # delta_x_pos = np.diff(raw_x_pos_array)
 
     # MATCH TIMES FOR FORCE AND PRESSURE
 
@@ -364,7 +364,7 @@ def new_try():
     # IN OLIVIA_FUNCTIONS.PY
 
     # LOOP THROUGH FORCE AND PRESSURE DATA FOR EACH FILE
-    print(f"norm_force length: {len(norm_force)}")
+    print(f"norm_position length: {len(norm_position)}")
     # print(f"norm_pressure length: {len(norm_pressure)}")
     # min_length = min([len(norm_force), len(norm_pressure)])
     # print(f"min_length length: {min_length}\n")
@@ -397,17 +397,17 @@ def new_try():
     # plot_array(norm_force, time_array=elapsed_time_f, ylabel="Testing time")
 
 
-    time = elapsed_time_f  # Make sure time matches norm_force length
+    time = elapsed_time_pos  # Make sure time matches norm_force length
 
     # Create a single plot
     plt.figure(figsize=(10, 5))  # Adjust the size as needed
 
     # Plot Norm(Force) vs. Distance Traveled
-    plt.plot(time, norm_force)
+    plt.plot(time, norm_position)
     plt.axvline(time[i], color='r', label=f'Time {i}')  # Red line at index i
-    plt.title('Norm(Force) vs. Time')
+    plt.title('Norm(Position) vs. Time')
     plt.xlabel('Time ()')
-    plt.ylabel('Norm(Force) (N)')
+    plt.ylabel('Norm(Position) ()')
     plt.legend()  # Show legend for the vertical line
     plt.show()
 

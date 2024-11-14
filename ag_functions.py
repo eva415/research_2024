@@ -319,27 +319,29 @@ def db3_to_csv_x(folder_name):
                 msg = deserialize_cdr(rawdata, connection.msgtype)
                 # Extract force components along x, y, and z axes
                 x_pos = msg.transform.translation.x
+                y_pos = msg.transform.translation.y
+                z_pos = msg.transform.translation.z
 
                 # Extract timestamp (seconds and nanoseconds) from message header
-                secs = int(timestamp // 1e9)
-                nsecs = int(timestamp % 1e9)
+                secs = msg.header.stamp.sec
+                nsecs = msg.header.stamp.nanosec
 
                 # Compile extracted data into a list
-                new_values = [x_pos, secs, nsecs]
+                new_values = [x_pos, y_pos, z_pos, secs, nsecs]
                 # Append this list to the main data list
                 df.append(new_values)
-                print(new_values)
+                # print(new_values)
 
     # Check if data was collected before attempting to save to CSV
     if df:
         # Save the accumulated data to a CSV file using the provided folder_name as the file name
         # print(df)
-        np.savetxt(name + 'x_pos.csv', np.array(df), delimiter=",")
+        np.savetxt(name + 'pos.csv', np.array(df), delimiter=",")
     else:
         print("No data found in the specified topic.")
 
     # Return the folder name as a confirmation of successful save
-    return name + 'x_pos'
+    return name + 'pos'
 
 
 # Applies a median filter to each variable --> noise reduction
