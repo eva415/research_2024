@@ -4,7 +4,8 @@ from rosbags.serde import deserialize_cdr
 from scipy.ndimage import median_filter
 from scipy.signal import butter, filtfilt
 import rosbag
-
+from rclpy.serialization import deserialize_message
+from rosidl_runtime_py.utilities import get_message
 
 def filter_force(variables, param):
     # Median Filter
@@ -258,6 +259,7 @@ def db3_to_csv_f(folder_name):
 
 # Reads a .db3 ros2 bag file and extracts relevant pressure data to a csv file
 # NOT IN PICK_CLASSIFIER.PY
+import matplotlib.pyplot as plt
 def db3_to_csv_p(folder_name):
     # Convert folder_name to a string to use as the base file name
     name = str(folder_name)
@@ -273,31 +275,53 @@ def db3_to_csv_p(folder_name):
             if connection.topic == '/io_and_status_controller/io_states':
                 # Deserialize the message data using CDR (Common Data Representation) format
                 # msg = deserialize_cdr(rawdata, connection.msgtype)
-                print(f"RAW DATA: {rawdata}")
-                # Extract force components along x, y, and z axes
-                # Fx = msg.wrench.force.x
-                # Fy = msg.wrench.force.y
-                # Fz = msg.wrench.force.z
+                # print(f"RAW DATA: {rawdata}")
+                msg_type = get_message('ur_msgs/msg/IOStates')
+                msg = deserialize_message(rawdata, msg_type)
+                # print(f"MSG: {msg}")
+                # Extract pressure components
+                P0 = msg.analog_in_states[0].state
+                # print(f"P0: {P0}")
+                P1 = msg.analog_in_states[1].state
+                # print(f"P1: {P1}")
+
+
+                # Extract timestamp (seconds and nanoseconds) from message header
+                secs = timestamp // 1_000_000_000  # Get the seconds part
+                nsecs = timestamp % 1_000_000_000  # Get the nanoseconds part
+                # print(f"secs: {secs}")
+                # print(f"nsecs: {nsecs}\n")
                 #
-                # # Extract timestamp (seconds and nanoseconds) from message header
-                # secs = msg.header.stamp.sec
-                # nsecs = msg.header.stamp.nanosec
-                #
-                # # Compile extracted data into a list
-                # new_values = [Fx, Fy, Fz, secs, nsecs]
-                # # Append this list to the main data list
-                # df.append(new_values)
+                # Compile extracted data into a list
+                new_values = [P0, P1, secs, nsecs]
+                # Append this list to the main data list
+                df.append(new_values)
 
     # Check if data was collected before attempting to save to CSV
     if df:
+        # print(f"Dimensions of df: {len(df)} rows, {len(df[0])} columns")
         # Save the accumulated data to a CSV file using the provided folder_name as the file name
-        # print(df)
-        np.savetxt(name + 'force.csv', np.array(df), delimiter=",")
+        np.savetxt(name + 'pressure.csv', np.array(df), delimiter=",")
+        # plt.figure(figsize=(10, 6))
+        # # plt.plot([row[2] for row in df], label='Seconds', color='blue', alpha=0.7)
+        # plt.plot([row[0] for row in df], label='Pressure0', color='red', alpha=0.7)
+        # plt.plot([row[1] for row in df], label='Pressure1', color='blue', alpha=0.7)
+        # plt.plot([row[2] for row in df], label='secs', color='green', alpha=0.7)
+        # plt.plot([row[3] for row in df], label='nsecs', color='black', alpha=0.7)
+        # plt.xlabel('Index')
+        # plt.ylabel('Time')
+        # plt.title('Time Series: Seconds and Nanoseconds')
+        # plt.legend()
+        # plt.grid(True)
+        # plt.tight_layout()
+        #
+        # # Display the plot instead of saving it
+        # plt.show()  # This will pop up the plot in a window
     else:
         print("No data found in the specified topic.")
 
     # Return the folder name as a confirmation of successful save
-    return name + 'force'
+    return name + 'pressure'
 
 
 # Reads a .db3 ros2 bag file and extracts relevant position data to a csv file
@@ -366,3 +390,70 @@ def moving_average(final_force):
         i += 1
 
     return filtered
+
+
+import struct
+
+
+def deserialize_io_states(raw_data):
+    """
+    Deserialize raw byte data into a structured IOStates object.
+
+    Args:
+    - raw_data (bytes): Raw byte data from IOStates message.
+
+    Returns:
+    - dict: Deserialized IOStates data as a dictionary.
+    """
+
+    # Initialize the index to read the raw data
+    index = 0
+
+    # 1. Deserialize Digital Inputs (18 pins, 1 byte per pin)
+    digital_in_states = []
+    for i in range(18):
+        # Each pin is represented by a single byte (0 for low, 1 for high)
+        state = struct.unpack_from('B', raw_data, index)[0]
+        digital_in_states.append({"pin": i, "state": bool(state)})
+        index += 1
+
+    # 2. Deserialize Digital Outputs (18 pins, 1 byte per pin)
+    digital_out_states = []
+    for i in range(18):
+        state = struct.unpack_from('B', raw_data, index)[0]
+        digital_out_states.append({"pin": i, "state": bool(state)})
+        index += 1
+
+    # 3. Deserialize Analog Inputs (2 pins, 4 bytes per pin, as floats)
+    analog_in_states = []
+    for i in range(2):
+        state = struct.unpack_from('f', raw_data, index)[0]  # 'f' is for 4-byte float
+        analog_in_states.append({"pin": i, "domain": 1, "state": state})
+        index += 4  # move forward by 4 bytes (size of float)
+
+    # 4. Deserialize Analog Outputs (2 pins, 4 bytes per pin, as floats)
+    analog_out_states = []
+    for i in range(2):
+        state = struct.unpack_from('f', raw_data, index)[0]  # 'f' is for 4-byte float
+        analog_out_states.append({"pin": i, "domain": 0, "state": state})
+        index += 4  # move forward by 4 bytes (size of float)
+
+    # Create the structured output as a dictionary
+    # return {
+    #     "digital_in_states": digital_in_states,
+    #     "digital_out_states": digital_out_states,
+    #     "analog_in_states": analog_in_states,
+    #     "analog_out_states": analog_out_states,
+    #     "flag_states": []  # assuming flag_states is empty as in your sample data
+    # }
+    return analog_in_states
+
+
+def unpack(buf):
+    # Create a new message object (RobotState is the type)
+    msg = IOStates()
+
+    # Deserialize buffer into message object
+    deserialize_message(buf, msg)
+
+    return msg

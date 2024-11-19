@@ -318,8 +318,8 @@ def return_pressure_array(filename):
     data_p = np.loadtxt('./' + file_p + '.csv', dtype="float", delimiter=',')
 
     # get seconds and nanoseconds, process for total and elapsed time
-    raw_sec_array_p = data_p[:, -1]
-    raw_nsec_array_p = data_p[:, -2]
+    raw_sec_array_p = data_p[:, -2]
+    raw_nsec_array_p = data_p[:, -1]
     total_time_pressure = total_time(raw_sec_array_p, raw_nsec_array_p)
     elapsed_time_pressure = elapsed_time(total_time_pressure)
 
@@ -397,7 +397,7 @@ def new_try():
     # plot_array(norm_force, time_array=elapsed_time_f, ylabel="Testing time")
 
 
-    time = elapsed_time_pos  # Make sure time matches norm_force length
+    time = elapsed_time_p  # Make sure time matches norm_force length
 
     # Create a single plot
     plt.figure(figsize=(10, 5))  # Adjust the size as needed
