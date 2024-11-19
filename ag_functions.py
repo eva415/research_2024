@@ -270,34 +270,34 @@ def db3_to_csv_p(folder_name):
         # Iterate over each message in the bag file
         for connection, timestamp, rawdata in reader.messages():
             # Check if the message is from the wrench topic (force-torque sensor)
-            if connection.topic == '/sensordata':
+            if connection.topic == '/io_and_status_controller/io_states':
                 # Deserialize the message data using CDR (Common Data Representation) format
-                msg = deserialize_cdr(rawdata, connection.msgtype)
-
+                # msg = deserialize_cdr(rawdata, connection.msgtype)
+                print(f"RAW DATA: {rawdata}")
                 # Extract force components along x, y, and z axes
-                Px = msg
-                Py = msg
-                Pz = msg
-
-                # Extract timestamp (seconds and nanoseconds) from message header
-                secs = int(timestamp // 1e9)
-                nsecs = int(timestamp % 1e9)
-
-                # Compile extracted data into a list
-                new_values = [Px, Py, Pz, secs, nsecs]
-                # Append this list to the main data list
-                df.append(new_values)
+                # Fx = msg.wrench.force.x
+                # Fy = msg.wrench.force.y
+                # Fz = msg.wrench.force.z
+                #
+                # # Extract timestamp (seconds and nanoseconds) from message header
+                # secs = msg.header.stamp.sec
+                # nsecs = msg.header.stamp.nanosec
+                #
+                # # Compile extracted data into a list
+                # new_values = [Fx, Fy, Fz, secs, nsecs]
+                # # Append this list to the main data list
+                # df.append(new_values)
 
     # Check if data was collected before attempting to save to CSV
     if df:
         # Save the accumulated data to a CSV file using the provided folder_name as the file name
-        print(df)
-        np.savetxt(name + 'pressure.csv', np.array(df), delimiter=",")
+        # print(df)
+        np.savetxt(name + 'force.csv', np.array(df), delimiter=",")
     else:
         print("No data found in the specified topic.")
 
     # Return the folder name as a confirmation of successful save
-    return name + 'pressure'
+    return name + 'force'
 
 
 # Reads a .db3 ros2 bag file and extracts relevant position data to a csv file

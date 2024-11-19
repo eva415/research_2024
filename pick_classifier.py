@@ -349,8 +349,8 @@ def new_try():
     os.chdir(DIRECTORY) # go to desired directory with bag files
 
     # norm_force, elapsed_time_f = return_force_array("rosbag2_2024_09_20-11_39_45_0.db3")
-    # norm_pressure, elapsed_time_p = return_pressure_array("rosbag2_2024_09_19-15_12_23_0.db3")
-    norm_position, elapsed_time_pos = return_position_array("rosbag2_2024_09_20-11_39_45_0.db3")
+    norm_pressure, elapsed_time_p = return_pressure_array("rosbag2_2024_09_19-15_12_23_0.db3")
+    # norm_position, elapsed_time_pos = return_position_array("rosbag2_2024_09_20-11_39_45_0.db3")
 
 
     # MATCH TIMES FOR FORCE AND PRESSURE
@@ -364,7 +364,7 @@ def new_try():
     # IN OLIVIA_FUNCTIONS.PY
 
     # LOOP THROUGH FORCE AND PRESSURE DATA FOR EACH FILE
-    print(f"norm_position length: {len(norm_position)}")
+    print(f"norm_pressure length: {len(norm_pressure)}")
     # print(f"norm_pressure length: {len(norm_pressure)}")
     # min_length = min([len(norm_force), len(norm_pressure)])
     # print(f"min_length length: {min_length}\n")
@@ -403,9 +403,9 @@ def new_try():
     plt.figure(figsize=(10, 5))  # Adjust the size as needed
 
     # Plot Norm(Force) vs. Distance Traveled
-    plt.plot(time, norm_position)
+    plt.plot(time, norm_pressure)
     plt.axvline(time[i], color='r', label=f'Time {i}')  # Red line at index i
-    plt.title('Norm(Position) vs. Time')
+    plt.title('Norm(pressure) vs. Time')
     plt.xlabel('Time ()')
     plt.ylabel('Norm(Position) ()')
     plt.legend()  # Show legend for the vertical line
