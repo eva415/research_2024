@@ -6,6 +6,9 @@ from scipy.signal import butter, filtfilt
 import rosbag
 from rclpy.serialization import deserialize_message
 from rosidl_runtime_py.utilities import get_message
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
 
 def filter_force(variables, param):
     # Median Filter
@@ -51,7 +54,7 @@ def elapsed_time(time_array):
     elapsed_t = time_array - time_array[0]
 
     # Optionally print for debugging
-    print(f"elapsed_time: {elapsed_t}")
+    # print(f"elapsed_time: {elapsed_t}")
 
     return elapsed_t
 # Combine seconds and nanoseconds arrays into a single timestamp in seconds
@@ -64,7 +67,7 @@ def total_time(seconds, nseconds):
     total = seconds + (nseconds / 1e9)
 
     # Optionally print for debugging
-    print(f"total_time: {total}")
+    # print(f"total_time: {total}")
 
     return total
 
@@ -212,7 +215,6 @@ def pressure_time(file):
     etimes_pressure = elapsed_time(times, times)
 
     return etimes_pressure
-
 # Reads a .db3 ros2 bag file and extracts relevant force data to a csv file
 # NOT IN PICK_CLASSIFIER.PY
 def db3_to_csv_f(folder_name):
@@ -255,8 +257,6 @@ def db3_to_csv_f(folder_name):
 
     # Return the folder name as a confirmation of successful save
     return name + 'force'
-
-
 # Reads a .db3 ros2 bag file and extracts relevant pressure data to a csv file
 # NOT IN PICK_CLASSIFIER.PY
 import matplotlib.pyplot as plt
@@ -280,9 +280,11 @@ def db3_to_csv_p(folder_name):
                 msg = deserialize_message(rawdata, msg_type)
                 # print(f"MSG: {msg}")
                 # Extract pressure components
-                P0 = msg.analog_in_states[0].state
+                # P0 = msg.analog_in_states[0].state
+                # P0 = P0*(-100.) + 1000.
                 # print(f"P0: {P0}")
                 P1 = msg.analog_in_states[1].state
+                P1 = P1*(-100.) + 1000.
                 # print(f"P1: {P1}")
 
 
@@ -293,7 +295,7 @@ def db3_to_csv_p(folder_name):
                 # print(f"nsecs: {nsecs}\n")
                 #
                 # Compile extracted data into a list
-                new_values = [P0, P1, secs, nsecs]
+                new_values = [P1, secs, nsecs]
                 # Append this list to the main data list
                 df.append(new_values)
 
@@ -342,8 +344,8 @@ def db3_to_csv_x(folder_name):
                 # Deserialize the message data using CDR (Common Data Representation) format
                 msg = deserialize_cdr(rawdata, connection.msgtype)
                 # Extract force components along x, y, and z axes
-                x_pos = msg.transform.translation.x
-                y_pos = msg.transform.translation.y
+                # x_pos = msg.transform.translation.x
+                # y_pos = msg.transform.translation.y
                 z_pos = msg.transform.translation.z
 
                 # Extract timestamp (seconds and nanoseconds) from message header
@@ -351,7 +353,7 @@ def db3_to_csv_x(folder_name):
                 nsecs = msg.header.stamp.nanosec
 
                 # Compile extracted data into a list
-                new_values = [x_pos, y_pos, z_pos, secs, nsecs]
+                new_values = [z_pos, secs, nsecs]
                 # Append this list to the main data list
                 df.append(new_values)
                 # print(new_values)
@@ -379,8 +381,7 @@ def filter_force(variables, param):
     return filtered
 
 # Calculates the moving average of the input data over a defined window size --> smoothing data
-def moving_average(final_force):
-    window_size = 5
+def moving_average(final_force, window_size = 5):
     i = 0
     filtered = []
 
@@ -457,3 +458,45 @@ def unpack(buf):
     deserialize_message(buf, msg)
 
     return msg
+
+import numpy as np
+import pandas as pd
+
+def pandas_to_merge_timestamps(timestamps_1, timestamps_2, timestamps_3, data_1, data_2, data_3):
+    # Flatten data arrays
+    data_1 = np.ravel(data_1)
+    data_2 = np.ravel(data_2)
+    data_3 = np.ravel(data_3)
+
+    # Create DataFrames
+    df1 = pd.DataFrame({'time': timestamps_1, 'value_1': data_1}).set_index('time')
+    df2 = pd.DataFrame({'time': timestamps_2, 'value_2': data_2}).set_index('time')
+    df3 = pd.DataFrame({'time': timestamps_3, 'value_3': data_3}).set_index('time')
+
+    # Merge datasets based on the time axis
+    synchronized_data = pd.merge_asof(
+        df1.sort_index(),
+        df2.sort_index(),
+        left_index=True,
+        right_index=True,
+        direction='nearest'  # Match nearest timestamps
+    )
+    synchronized_data = pd.merge_asof(
+        synchronized_data.sort_index(),
+        df3.sort_index(),
+        left_index=True,
+        right_index=True,
+        direction='nearest'  # Match nearest timestamps
+    )
+
+    # Fill NaN values (optional, based on your needs)
+    synchronized_data.fillna(method='ffill', inplace=True)
+
+    # Extract synchronized arrays
+    new_time_array = synchronized_data.index.to_numpy()
+    new_data_1_array = synchronized_data['value_1'].to_numpy()
+    new_data_2_array = synchronized_data['value_2'].to_numpy()
+    new_data_3_array = synchronized_data['value_3'].to_numpy()
+
+    # Return new arrays
+    return new_time_array, new_data_1_array, new_data_2_array, new_data_3_array
