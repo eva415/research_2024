@@ -6,25 +6,36 @@ from std_srvs.srv import Empty
 from std_msgs.msg import UInt16
 from geometry_msgs.msg import WrenchStamped
 import numpy as np
+from rclpy.serialization import deserialize_message
+from rosidl_runtime_py.utilities import get_message
+from ur_msgs.msg import IOStates  # Make sure to import the message type
+from datetime import datetime
 
+SECONDS_TO_CROP = 30
 
 class EventDetector(Node):
 
     def __init__(self):
 
         super().__init__('event_detector')
+        self.simulation_mode = True  # Set this to True if running with bag files
         self.cbgroup = ReentrantCallbackGroup()
-        self.stop_controller_cli = self.create_client(Empty, 'stop_controller', callback_group=self.cbgroup)
-        self.stop_controller_pull_twist = self.create_client(Empty, 'pull_twist/stop_controller')
-        self.wait_for_srv(self.stop_controller_cli)
-        self.wait_for_srv(self.stop_controller_pull_twist)
-        self.stop_controller_req = Empty.Request()
+        if not self.simulation_mode:
+            self.stop_controller_cli = self.create_client(Empty, 'stop_controller', callback_group=self.cbgroup)
+            self.stop_controller_pull_twist = self.create_client(Empty, 'pull_twist/stop_controller')
+            self.wait_for_srv(self.stop_controller_cli)
+            self.wait_for_srv(self.stop_controller_pull_twist)
+            self.stop_controller_req = Empty.Request()
+        else:
+            self.start_time = datetime.now()
+            print('In simulation mode (replaying bag files)...')
 
         self.detect_service = self.create_service(Empty, 'detect_events', self.detect_events,
                                                   callback_group=self.cbgroup)
         self.subscriber = self.create_subscription(WrenchStamped, '/ft300_wrench', self.wrench_callback, 10,
                                                    callback_group=self.cbgroup)
-        self.pressure_subscriber = self.create_subscription(UInt16, '/pressure', self.pressure_callback, 10,
+        IOStates_msg_type = get_message('ur_msgs/msg/IOStates')
+        self.pressure_subscriber = self.create_subscription(IOStates_msg_type, '/io_and_status_controller/io_states', self.pressure_callback, 10,
                                                             callback_group=self.cbgroup)  # WUR to set topic
 
         self.force_memory = []
@@ -62,7 +73,10 @@ class EventDetector(Node):
         self.active = 0
 
     def stop_controller(self):
-
+        if self.simulation_mode:
+            # self.get_logger().info("Simulation mode enabled: Skipping stop_controller logic")
+            self.clear_trial()
+            return
         self.future = self.stop_controller_cli.call_async(self.stop_controller_req)
         self.future.add_done_callback(self.service_response_callback)
         # rclpy.spin_until_future_complete(self, self.future)
@@ -84,20 +98,25 @@ class EventDetector(Node):
 
     def wrench_callback(self, msg):
         wrench = msg.wrench
-
         current_force = np.array([wrench.force.x, wrench.force.y,
                                   wrench.force.z])
 
         force_mag = np.linalg.norm(current_force)
+        # print(f"f: {force_mag}")
         self.force_memory.insert(0, force_mag)
         if len(self.force_memory) > self.window:
             self.force_memory = self.force_memory[0:self.window]
 
     def pressure_callback(self, msg):
         # expects a scalar as a message
-        pressure = msg.data
+        # msg_type = get_message('ur_msgs/msg/IOStates')
+        # pressure = deserialize_message(msg, msg_type)
+        pressure = msg
+        current_pressure = msg.analog_in_states[1].state
+        current_pressure = current_pressure * (-100.) + 1000.
+        # print(f"p: {current_pressure}")
 
-        self.pressure_memory.insert(0, pressure)
+        self.pressure_memory.insert(0, current_pressure)
         if len(self.pressure_memory) > self.window:
             self.pressure_memory = self.pressure_memory[0:self.window]
 
@@ -115,13 +134,21 @@ class EventDetector(Node):
         return filtered
 
     def timer_callback(self):
-
+        # print("..............................................")
+        elapsed_time = datetime.now() - self.start_time
+        elapsed_time_str = str(elapsed_time).split('.')[0]  # Remove microseconds
+        if self.simulation_mode:
+            self.active = 1
+            elapsed_seconds = elapsed_time.total_seconds()
+            if elapsed_seconds < SECONDS_TO_CROP:
+                return
         # if for some reason the engaged pressure is higher, flip > and < for pressure
-
         if len(self.force_memory) < self.window or len(self.pressure_memory) < self.window:
+            # print("Not enough data to process pick classification yet.")
             return
 
         if self.active == 0:
+            print("System is inactive, skipping pick classification.")
             return
 
         filtered_force = self.moving_average(self.force_memory)
@@ -136,34 +163,40 @@ class EventDetector(Node):
 
         cropped_backward_diff = np.average(np.array(backwards_diff))
 
-        # if the suction cups are disengaged, the pick failed
+        # If the suction cups are disengaged, the pick failed
         if avg_pressure >= self.pressure_threshold:
             print(
-                f"Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(filtered_force)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}")
+                f"Apple was failed to be picked at {elapsed_time_str}! :( Force: {np.round(filtered_force[0])} Max Force: {np.max(filtered_force)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}")
             self.stop_controller()
 
-        # if there is a reasonable force
+        # If there is a reasonable force, but pick hasn't been classified yet
         elif filtered_force[0] >= 5:
-
+            # print("Force threshold met, but pick not yet classified.")
             self.flag = True  # force was achieved
 
-            # check for big force drop
+            # Check for a significant force drop
             if float(cropped_backward_diff) <= self.force_change_threshold and avg_pressure < self.pressure_threshold:
-                print(f"Apple has been picked! Bdiff: {cropped_backward_diff}   Pressure: {avg_pressure}.\
+                # Print the time when the apple is picked
+                print(
+                    f"Apple has been picked at {elapsed_time_str}! Bdiff: {cropped_backward_diff}   Pressure: {avg_pressure}.\
                         #Force: {filtered_force[0]} vs. Max Force: {np.max(self.force_memory)}")
                 self.stop_controller()
 
             elif float(
                     cropped_backward_diff) <= self.force_change_threshold and avg_pressure >= self.pressure_threshold:
                 print(
-                    f"Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(self.force_memory)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}")
+                    f"Apple was failed to be picked at {elapsed_time_str}! :( Force: {np.round(filtered_force[0])} Max Force: {np.max(self.force_memory)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}")
                 self.stop_controller()
 
-        # if force is low, but was high, that's a failure too
+        # If force is low but was high previously, that's a failure too
         elif self.flag and filtered_force[0] < 4.5:
             print(
-                f"Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(self.force_memory)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}")
+                f"Apple was failed to be picked at {elapsed_time_str}! :( Force: {np.round(filtered_force[0])} Max Force: {np.max(self.force_memory)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}")
             self.stop_controller()
+
+        # If no decision has been made yet, print a message indicating the system is still processing
+        # else:
+            # print("Pick status is still being processed. Force and/or pressure thresholds not yet met.")
 
     def wait_for_srv(self, srv):
         while not srv.wait_for_service(timeout_sec=1.0):

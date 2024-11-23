@@ -19,13 +19,67 @@ RED = "\033[91m"
 
 # Directory of the bag files
 DIRECTORY = "/home/evakrueger/Downloads/Rosbag_closed_loop"
-FILENAME = "rosbag2_2024_09_20-11_55_48_0.db3"
-PRESSURE_THRESHOLD = 700 # this is the thing to change if it stops working right: originally was 700
-BACKWARD_DIFF_LIMIT = -1.0
+FILENAME = "rosbag2_2024_09_20-10_20_11_0.db3"
+# PRESSURE_THRESHOLD = 700 # this is the thing to change if it stops working right: originally was 700
+engaged_pressure = 550.0
+disengaged_pressure = 1000.0
+failure_ratio = 0.57
+PRESSURE_THRESHOLD = engaged_pressure + failure_ratio * (disengaged_pressure - engaged_pressure) # 806.5
+FORCE_CHANGE_THRESHOLD = -1.0
 FORCE_THRESHOLD = 5
 INDEX_OG = 500 # originally, olivia had the index number set to 500
 PDF_TITLE = "pick_classifier_netherlands_nov13.pdf"
 
+
+def wur_event_detect(force_array, pressure_array, active = 0, window = 10, flag = False):
+    # if for some reason the engaged pressure is higher, flip > and < for pressure
+
+    if len(force_array) < window or len(pressure_array) < window:
+        return
+
+    if active == 0:
+        return
+
+    filtered_force = moving_average(force_array)
+    avg_pressure = np.average(pressure_array)
+
+    backwards_diff = []
+    h = 2
+    for j in range(2 * h, (len(filtered_force))):
+        diff = ((3 * filtered_force[j]) - (4 * filtered_force[j - h]) + filtered_force[j - (2 * h)]) / (2 * h)
+        backwards_diff.append(diff)
+        j += 1
+
+    cropped_backward_diff = np.average(np.array(backwards_diff))
+
+    # if the suction cups are disengaged, the pick failed
+    if avg_pressure >= PRESSURE_THRESHOLD:
+        print(
+            f"Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(filtered_force)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}")
+        return 0
+
+    # if there is a reasonable force
+    elif filtered_force[0] >= 5:
+
+        flag = True  # force was achieved
+
+        # check for big force drop
+        if float(cropped_backward_diff) <= FORCE_CHANGE_THRESHOLD and avg_pressure < PRESSURE_THRESHOLD:
+            print(f"Apple has been picked! Bdiff: {cropped_backward_diff}   Pressure: {avg_pressure}.\
+                    #Force: {filtered_force[0]} vs. Max Force: {np.max(force_array)}")
+            return 1
+
+        elif float(
+                cropped_backward_diff) <= FORCE_CHANGE_THRESHOLD and avg_pressure >= PRESSURE_THRESHOLD:
+            print(
+                f"Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(force_array)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}")
+            return 0
+
+    # if force is low, but was high, that's a failure too
+    elif flag and filtered_force[0] < 4.5:
+        print(
+            f"Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(force_array)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}")
+        return 0
 # YAY Given force and pressure data, determine if pick occurred (cb)
 def pick_analysis_callback(force_data, pressure_data, flag=False):
     if len(force_data) < 9:
@@ -84,38 +138,6 @@ def pick_analysis_callback(force_data, pressure_data, flag=False):
     else:
         print("Failed to identify pick type... Force was high and remains high")
         return 2
-# BOO Function to create final plots
-def create_nforce_distance_num_deriv_plots(force, time, cropped_low_bdiff, pressure, i, number,
-                                           attempt, pick_type, general_time, actual):
-
-    fig, ax = plt.subplots(3, 1, figsize=(10, 30))  # Change to 3 rows
-    # Plot 1
-    ax[0].plot(time, force)
-    ax[0].axvline(time[i], color='r')
-    ax[0].set_title('Norm(Force) vs. Distance Traveled')
-    ax[0].set_xlabel('Displacement (m)')
-    ax[0].set_ylabel('Norm(Force) (N)')
-
-    # Plot 2 (New Pressure Plot)
-    ax[1].plot(time, force)
-    ax[1].axvline(time[i], color='r')
-    ax[1].set_title('Norm(Pressure) vs. Distance Traveled')
-    ax[1].set_xlabel('Displacement (m)')
-    ax[1].set_ylabel('Norm(Pressure) (Pa)')
-
-    # Plot 3
-    ax[2].plot(time, force)
-    ax[2].set_title('Numerical Derivative of Norm(Force) over Distance')
-    ax[2].set_xlabel('Displacement (m)')
-    ax[2].set_ylabel('Numerical Derivative of Norm(Force)')
-
-    plt.subplots_adjust(top=0.9, hspace=0.29)
-    fig.suptitle(
-        f'Pick {number}-{attempt} Classification: {"Successful" if pick_type else "Failed"} Pick at Time {np.round(general_time[i], 2)} Seconds (Actual: {"Successful" if actual else "Failed"})'
-    )
-    plt.show()
-    return fig
-# YAY Plot confusion matrix with final counts
 def make_confusion_matrix(pos_pos, neg_neg, pos_neg, neg_pos):
     # Define the confusion matrix data
     matrix = np.array([[pos_pos, pos_neg],
@@ -154,109 +176,6 @@ def make_confusion_matrix(pos_pos, neg_neg, pos_neg, neg_pos):
 
     plt.title("Confusion Matrix", fontsize=20)
     # plt.show()
-# # Olivia's classification program
-# def classification_from_file(name, number, attempt, actual):
-#     file = bag_to_csv(name)
-#     # separates the data from .bag into force and time arrays
-#     data = np.loadtxt('./' + file + '.csv', dtype="float", delimiter=',')
-#
-#     sec = data[:, -1]
-#     nsec = data[:, -2]
-#     force = data[:, :-2]
-#     time = sec.tolist()
-#     ntime = nsec.tolist()
-#
-#     # normalizes force data
-#     f_arr = np.linalg.norm(force, axis=1)
-#
-#     # calculates elapsed time.
-#     tot_time = total_time(time, ntime)
-#     etime_force = elapsed_time(tot_time, tot_time)
-#
-#     # extracts robot displacement data (total_disp) and joint times (joint_times_sec and joint_times_nsec)
-#     path = UR5e_ros1(0, name)
-#     total_disp = path.z
-#     joint_times_sec = path.times_seconds
-#     joint_times_nsec = path.times_nseconds
-#
-#     tot_time_j = total_time(joint_times_sec, joint_times_nsec)
-#     etime_joint = elapsed_time(tot_time_j, tot_time_j)
-#
-#     # calculates pressure data, normalizes it, and aligns it with the force data for analysis
-#     pressure_array = bag_pressure(file)
-#     p_arr = np.linalg.norm(pressure_array, axis=1)
-#     etimes_pressure = pressure_time(file)
-#
-#     f_arr_col = f_arr[..., None]
-#     total_disp_col = np.array(total_disp)[..., None]
-#     p_arr_col = p_arr[..., None]
-#
-#     # match_times synchronizes force, displacement, and pressure arrays by matching elapsed times.
-#     final_force, delta_x, general_time = match_times(etime_force, etime_joint, f_arr_col, total_disp_col)
-#     final_pressure, p_dis, other_time = match_times(etimes_pressure, etime_joint, p_arr_col, total_disp_col)
-#     fp = final_pressure.tolist()
-#     filtered = filter_force(final_force, 21)
-#
-#     # A backward finite difference is applied to compute derivatives, giving a rate of change for filtered force data.
-#     backwards_diff = []
-#     h = 2
-#     for j in range(2 * h, (len(filtered))):
-#         diff = ((3 * filtered[j]) - (4 * filtered[j - h]) + filtered[j - (2 * h)]) / (2 * h)
-#         backwards_diff.append(diff)
-#         j += 1
-#
-#
-#     # Filtering is applied to the force array using a Butterworth low-pass filter to smooth out high-frequency noise
-#     low_bdiff = butter_lowpass_filter(backwards_diff, CUTOFF, FS, ORDER)
-#
-#     # The filtered data (low_delta_x) is further smoothed using a Savitzky-Golay filter
-#     low_delta_x = scipy.signal.savgol_filter(delta_x[:, 0], 600, 1)
-#
-#     # The script uses KneeLocator to identify concave and convex bends in the displacement data.
-#     # NOT SURE WHY SOME OF OLIVIA'S CODE IS COMMENTED OUT AND WHY SOME VARIABLES NEVER GET USED??
-#     if number != 25:
-#         kn = KneeLocator(general_time, low_delta_x, curve='concave', direction='decreasing')
-#         kn1 = KneeLocator(general_time, low_delta_x, curve='convex', direction='decreasing')
-#         idx2 = kn1.minima_indices[0]
-#         idx = kn1.minima_indices[-2]
-#         peaks, peak_index = scipy.signal.find_peaks(low_delta_x, height=0.03, plateau_size=(None, None))
-#         peak = int(peak_index['right_edges'][-1])
-#         peak1 = int(peak_index['left_edges'][0])
-#
-#         # pressure turn
-#         pturn1 = np.where(final_pressure == np.min(final_pressure))[0]
-#
-#         idx2 = np.where(low_delta_x == np.max(low_delta_x[idx2:-1]))[0][0]
-#         turn = np.where(low_delta_x == np.min(low_delta_x[idx2:-1]))[
-#             0]  # this is not picking where the turn around happens exactly
-#         turn2 = np.where(low_delta_x == np.max(low_delta_x[idx2:-1]))[0]
-#
-#         cropped_x = delta_x[idx2 + INDEX_OG:turn[0]]
-#         new_x_part = flipping_data(cropped_x)
-#
-#     else:
-#         idx2 = np.where(low_delta_x == np.min(low_delta_x))[0][0]
-#         turn = np.where(low_delta_x == np.max(low_delta_x[idx2:-1]))[0]
-#         new_x_part = delta_x[idx2 + INDEX_OG:turn[0]]
-#
-#     # Uncomment below to visualize selected indices and turning points for analysis.
-#     # plot_dx_over_time(general_time, low_delta_x, idx2, turn)
-#
-#     cropped_f = filtered[idx2 + INDEX_OG:turn[0]]
-#     # print("CROPPED_F length:", len(cropped_f))
-#     cropped_p = fp[idx2 + INDEX_OG: turn[0]]
-#     # print("CROPPED_P length:", len(cropped_p))
-#     cropped_low_bdiff = low_bdiff.tolist()[idx2 - 50 + INDEX_OG:turn[0] - 50]
-#     # print("CROPPED_LOW_BDIFF length:", len(cropped_low_bdiff))
-#
-#     type, i = picking_type_classifier(cropped_f, cropped_p)
-#
-#     # Uncomment following line to view the final plots of force, pressure v distance and the numerical derivative
-#     create_nforce_distance_num_deriv_plots(cropped_f, new_x_part, cropped_low_bdiff, cropped_p, i, number, attempt, type, general_time, actual)
-#
-#     print("completed this file attempt:")
-#     print(f"{RED if type != actual else ''}type: {"Successful" if type else "Failed"}, i: {i}, actual: {"Successful\n" if actual else "Failed\n"}{RESET}")
-#     return type, actual
 def DEAL_WITH_THIS_LATER():
     # information for confusion matrix RIGHT NOW EXAMPLE VALUES
     total_count_attempts = 1
@@ -506,6 +425,11 @@ def new_try():
     cropped_low_bdiff = low_bdiff.tolist()[idx2 - 50 + INDEX_OG:turn[0] - 50]
 
     type, i = picking_type_classifier(cropped_f, cropped_p)
+    k = 0
+    while (k+15 < len(cropped_f)) and (k+15 < len(cropped_p)):
+        result = wur_event_detect(f_arr[k:k + 15], p_arr[k:k + 15])
+        print(f"k: {k}, result: {result}")
+        k += 15
 
     fig, ax = plt.subplots(2, 1, figsize=(10, 30))
     ax[0].plot(new_x_part, cropped_f)
