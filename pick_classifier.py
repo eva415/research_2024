@@ -28,7 +28,7 @@ PRESSURE_THRESHOLD = engaged_pressure + failure_ratio * (disengaged_pressure - e
 FORCE_CHANGE_THRESHOLD = -1.0
 FORCE_THRESHOLD = 5
 INDEX_OG = 500 # originally, olivia had the index number set to 500
-PDF_TITLE = "pick_classifier_netherlands_nov13.pdf"
+PDF_TITLE = "pick_classifier_netherlands_nov25.pdf"
 
 
 def wur_event_detect(force_array, pressure_array, active = 0, window = 10, flag = False):
@@ -198,7 +198,7 @@ def DEAL_WITH_THIS_LATER():
 
     # close the object to save the pdf
     p.close()
-def plot_array(array, time_array=None, xlabel="Time (s)", ylabel="Force", show=True):
+def plot_array(array, time_array=None, xlabel="Time (s)", ylabel="Force", show=False):
     # If no time array is provided, use the indices of the force_array as time
     if time_array is None:
         time_array = np.arange(len(array))
@@ -252,7 +252,7 @@ def return_displacement_array(filename):
     # get array of raw force data and normalize it
     raw_pos_array = data_pos[:, :-2]
     # norm_pos_array = np.linalg.norm(raw_pos_array, axis=1)
-    # plot_array(total_disp, time_array=elapsed_time_pos, ylabel="Total Displacement")
+    # plot_array(raw_pos_array, time_array=elapsed_time_pos, ylabel="Total Displacement")
     raw_pos_array = np.array(raw_pos_array).flatten()
     return raw_pos_array, elapsed_time_pos
 def return_pressure_array(filename):
@@ -448,7 +448,53 @@ def new_try():
         f'Pick Classification: {type} Pick at Time {np.round(general_time[i], 2)} Seconds (Actual Classification: __)')
 
     plt.show()
+def loop_through_directory_save_plots(directory_path=DIRECTORY):
+    os.chdir(DIRECTORY)
+
+    # Loop through all files in the directory
+    for filename in os.listdir(directory_path):
+        file_path = os.path.join(directory_path, filename)
+        # Check if it's a file (not a directory)
+        if os.path.isdir(file_path):
+            print(f"Found directory: {file_path}")
+            f_arr, etime_force = return_force_array(filename)
+            p_arr, etimes_pressure = return_pressure_array(filename)
+            total_disp, etime_joint = return_displacement_array(filename)
+
+            # PLOT FIGS
+            fig, ax = plt.subplots(3, 1, figsize=(10, 30))
+            ax[0].plot(etime_force, f_arr)
+            ax[0].set_title(f'Norm(Force): /ft300_wrench\n/wrench/force/x, y, and z')
+            ax[0].set_xlabel('Displacement (m)')
+            ax[0].set_ylabel('Norm(Force) (N)')
+
+            ax[1].plot(etimes_pressure, p_arr)  # etime = 42550	central_diff = 42450
+            ax[1].set_title(
+                f'Pressure: /io_and_status_controller/io_states\n/analog_in_states[]/analog_in_states[1]/state')
+            ax[1].set_xlabel('Displacement (m)')
+            ax[1].set_ylabel('Pressure')
+
+            ax[2].plot(etime_joint, total_disp)  # etime = 42550	central_diff = 42450
+            ax[2].set_title(f'Tool Pose (z-axis): /tool_pose\n/transform/translation/z')
+            ax[2].set_xlabel('Displacement (m)')
+            ax[2].set_ylabel('Z-position')
+
+            plt.subplots_adjust(top=0.9, hspace=0.29)
+            fig.suptitle(
+                f'file: {FILENAME}')
+
+            print(f"Finished directory: {file_path}\n")
+
+    p = PdfPages(PDF_TITLE)  # initialize PDF object for plots
+    fig_nums = plt.get_fignums()
+    figs = [plt.figure(n) for n in fig_nums]  # iterating over the numbers in list
+    for fig in figs:
+        # and save/append that figure to the pdf file
+        fig.savefig(p, format='pdf')
+        plt.close(fig)
+    # close the object to save the pdf
+    p.close()
 
 
 if __name__ == '__main__':
-    new_try()
+    loop_through_directory_save_plots()
