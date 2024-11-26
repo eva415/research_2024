@@ -481,7 +481,7 @@ def loop_through_directory_save_plots(directory_path=DIRECTORY):
 
             plt.subplots_adjust(top=0.9, hspace=0.29)
             fig.suptitle(
-                f'file: {FILENAME}')
+                f'file: {filename}')
 
             print(f"Finished directory: {file_path}\n")
 
