@@ -344,16 +344,16 @@ def db3_to_csv_x(folder_name):
                 # Deserialize the message data using CDR (Common Data Representation) format
                 msg = deserialize_cdr(rawdata, connection.msgtype)
                 # Extract force components along x, y, and z axes
-                # x_pos = msg.transform.translation.x
-                # y_pos = msg.transform.translation.y
-                z_pos = msg.transform.translation.z
+                x_pos = msg.transform.translation.x
+                y_pos = msg.transform.translation.y
+                # z_pos = msg.transform.translation.z
 
                 # Extract timestamp (seconds and nanoseconds) from message header
                 secs = msg.header.stamp.sec
                 nsecs = msg.header.stamp.nanosec
 
                 # Compile extracted data into a list
-                new_values = [z_pos, secs, nsecs]
+                new_values = [x_pos, y_pos, secs, nsecs]
                 # Append this list to the main data list
                 df.append(new_values)
                 # print(new_values)

@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 from ag_functions import (match_times, moving_average, db3_to_csv_f, db3_to_csv_p, db3_to_csv_x, total_time,
-                          elapsed_time, filter_force, butter_lowpass_filter, flipping_data, pandas_to_merge_timestamps)
+                          elapsed_time, filter_force, butter_lowpass_filter, flipping_data)
 import scipy as scipy
 from kneed import KneeLocator
 
@@ -19,15 +19,14 @@ RED = "\033[91m"
 
 # Directory of the bag files
 DIRECTORY = "/home/evakrueger/Downloads/Rosbag_closed_loop"
-FILENAME = "rosbag2_2024_09_20-10_20_11_0.db3"
-# PRESSURE_THRESHOLD = 700 # this is the thing to change if it stops working right: originally was 700
-engaged_pressure = 550.0
+FILENAME = "rosbag2_2024_09_20-11_20_47.db3"
+engaged_pressure = 300.0
 disengaged_pressure = 1000.0
 failure_ratio = 0.57
-PRESSURE_THRESHOLD = engaged_pressure + failure_ratio * (disengaged_pressure - engaged_pressure) # 806.5
-FORCE_CHANGE_THRESHOLD = -1.0
+PRESSURE_THRESHOLD = engaged_pressure + failure_ratio * (disengaged_pressure - engaged_pressure) # 699
+FORCE_CHANGE_THRESHOLD = -0.8
 FORCE_THRESHOLD = 5
-INDEX_OG = 500 # originally, olivia had the index number set to 500
+INDEX_OG = 0 # originally, olivia had the index number set to 500
 PDF_TITLE = "pick_classifier_netherlands_nov25.pdf"
 
 
@@ -80,7 +79,6 @@ def wur_event_detect(force_array, pressure_array, active = 0, window = 10, flag 
         print(
             f"Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(force_array)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}")
         return 0
-# YAY Given force and pressure data, determine if pick occurred (cb)
 def pick_analysis_callback(force_data, pressure_data, flag=False):
     if len(force_data) < 9:
         print(f"Force array is of length {len(force_data)}")
@@ -251,9 +249,9 @@ def return_displacement_array(filename):
 
     # get array of raw force data and normalize it
     raw_pos_array = data_pos[:, :-2]
-    # norm_pos_array = np.linalg.norm(raw_pos_array, axis=1)
-    # plot_array(raw_pos_array, time_array=elapsed_time_pos, ylabel="Total Displacement")
-    raw_pos_array = np.array(raw_pos_array).flatten()
+    norm_pos_array = np.linalg.norm(raw_pos_array, axis=1)
+    # plot_array(norm_pos_array, time_array=elapsed_time_pos, ylabel="Total Displacement")
+    raw_pos_array = np.array(norm_pos_array).flatten()
     return raw_pos_array, elapsed_time_pos
 def return_pressure_array(filename):
     # FUNCTION TO RETRIEVE PRESSURE DATA, NORMALIZE
@@ -284,8 +282,10 @@ def picking_type_classifier(force, pressure):
 
         return filtered
 
+    pick_type = None
     i = 10
     while i >= 10:
+        # print(i)
         idx = 0
         cropped_force = force[i - 10:i]
         filtered_force = moving_average(cropped_force)
@@ -300,21 +300,20 @@ def picking_type_classifier(force, pressure):
             j += 1
 
         cropped_backward_diff = np.average(np.array(backwards_diff))
-
-        if filtered_force[0] >= 5:
-            if float(
-                    cropped_backward_diff) <= -1.0 and avg_pressure < 700:  # this is the bitch to change if it stops working right
-                type = f'Successful'
-                # print(f'Apple has been picked! Bdiff: {cropped_backward_diff}   Pressure: {avg_pressure}.\
+        # print(f"{float(cropped_backward_diff)}")
+        if filtered_force[0] >= FORCE_THRESHOLD:
+            if float(cropped_backward_diff) <= FORCE_CHANGE_THRESHOLD and avg_pressure < PRESSURE_THRESHOLD:  # this is the bitch to change if it stops working right
+                pick_type = f'Successful'
+                print(f'Apple has been picked! Bdiff: {cropped_backward_diff}   Pressure: {avg_pressure}.\
                 # Force: {filtered_force[0]} vs. Max Force: {np.max(force)}')
                 break
 
-            elif float(cropped_backward_diff) <= -1.0 and avg_pressure >= 700:
-                type = f'Failed'
-                # print(f'Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(force)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}')
+            elif float(cropped_backward_diff) <= FORCE_CHANGE_THRESHOLD and avg_pressure >= PRESSURE_THRESHOLD:
+                pick_type = f'Failed'
+                print(f'Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(force)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}')
                 break
 
-            elif float(cropped_backward_diff) > -1.0 and np.round(filtered_force[0]) >= 5:
+            elif float(cropped_backward_diff) > FORCE_CHANGE_THRESHOLD and np.round(filtered_force[0]) >= FORCE_THRESHOLD:
                 idx = idx + 1
                 i = i + 1
 
@@ -323,17 +322,19 @@ def picking_type_classifier(force, pressure):
                 i = i + 1
 
             else:
-                if float(cropped_backward_diff) > -1.0 and np.round(filtered_force[0]) < 5:
-                    type = f'Failed'
-                    # print(f'Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(force)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}')
+                if float(cropped_backward_diff) > FORCE_CHANGE_THRESHOLD and np.round(filtered_force[0]) < FORCE_THRESHOLD:
+                    pick_type = f'Failed'
+                    print(f'Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(force)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}')
                     break
 
-                elif avg_pressure >= 700 and np.round(filtered_force[0]) < 5:
-                    type = f'Failed'
-                    # print(f'Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(force)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}')
+                elif avg_pressure >= PRESSURE_THRESHOLD and np.round(filtered_force[0]) < FORCE_THRESHOLD:
+                    pick_type = f'Failed'
+                    print(f'Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(force)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}')
                     break
 
-    return type, i
+    return pick_type, i
+
+
 def new_try():
     flag = False  # reset every new pick analysis
     os.chdir(DIRECTORY) # go to desired directory with bag files
@@ -342,39 +343,43 @@ def new_try():
     p_arr, etimes_pressure = return_pressure_array(FILENAME)
     total_disp, etime_joint = return_displacement_array(FILENAME)
 
+    # downsample to get same number of data points
+    p_arr_new = scipy.signal.resample(p_arr, len(f_arr))
 
-    fig, ax = plt.subplots(3, 1, figsize=(10, 30))
-    ax[0].plot(etime_force, f_arr)
-    ax[0].set_title(f'Norm(Force): /ft300_wrench\n/wrench/force/x, y, and z')
-    ax[0].set_xlabel('Displacement (m)')
-    ax[0].set_ylabel('Norm(Force) (N)')
-
-    ax[1].plot(etimes_pressure, p_arr)  # etime = 42550	central_diff = 42450
-    ax[1].set_title(f'Pressure: /io_and_status_controller/io_states\n/analog_in_states[]/analog_in_states[1]/state')
-    ax[1].set_xlabel('Displacement (m)')
-    ax[1].set_ylabel('Pressure')
-
-    ax[2].plot(etime_joint, total_disp)  # etime = 42550	central_diff = 42450
-    ax[2].set_title(f'Tool Pose (z-axis): /tool_pose\n/transform/translation/z')
-    ax[2].set_xlabel('Displacement (m)')
-    ax[2].set_ylabel('Z-position')
-
-    plt.subplots_adjust(top=0.9, hspace=0.29)
-    fig.suptitle(
-        f'file: {FILENAME}')
-
-    plt.show()
+    # uncomment to view plots of data over time
+    # fig, ax = plt.subplots(3, 1, figsize=(10, 30))
+    # ax[0].plot(etime_force, f_arr)
+    # ax[0].set_title(f'Norm(Force): /ft300_wrench\n/wrench/force/x, y, and z')
+    # ax[0].set_xlabel('Time (s)')
+    # ax[0].set_ylabel('Norm(Force) (N)')
+    #
+    # ax[1].plot(etime_force, p_arr_new)  # etime = 42550	central_diff = 42450
+    # ax[1].set_title(f'Pressure: /io_and_status_controller/io_states\n/analog_in_states[]/analog_in_states[1]/state')
+    # ax[1].set_xlabel('Time (s)')
+    # ax[1].set_ylabel('Pressure')
+    #
+    # ax[2].plot(etime_joint, total_disp)  # etime = 42550	central_diff = 42450
+    # ax[2].set_title(f'Norm(Tool Pose): /tool_pose\n/transform/translation/x and y')
+    # ax[2].set_xlabel('Time (s)')
+    # ax[2].set_ylabel('Tool Pose')
+    #
+    # plt.subplots_adjust(top=0.9, hspace=0.29)
+    # fig.suptitle(
+    #     f'file: {FILENAME}')
+    #
+    # plt.show()
 
     f_arr_col = f_arr[..., None]
     total_disp_col = np.array(total_disp)[..., None]
-    p_arr_col = p_arr
-    final_force, delta_x, general_time = match_times(etime_force, etime_joint, f_arr_col, total_disp_col)
+    p_arr_col = p_arr_new
 
-    final_pressure, p_dis, other_time = match_times(etimes_pressure, etime_joint, p_arr_col, total_disp_col)
+    final_force, delta_x, general_time = match_times(etime_force, etime_joint, f_arr_col, total_disp_col)
+    final_pressure, p_dis, other_time = match_times(etime_force, etime_joint, p_arr_col, total_disp_col)
 
     fp = final_pressure.tolist()
 
     filtered = filter_force(final_force, 21)
+    fp_new = scipy.signal.resample(fp, len(filtered)) # downsample to get right length array for indexing
 
     # Central Difference
     backwards_diff = []
@@ -394,60 +399,136 @@ def new_try():
     low_delta_x = scipy.signal.savgol_filter(delta_x[:, 0], 600, 1)
 
     # selecting the correct data to use
-
-    kn = KneeLocator(general_time, low_delta_x, curve='concave', direction='decreasing')
     kn1 = KneeLocator(general_time, low_delta_x, curve='convex', direction='decreasing')
     idx2 = kn1.minima_indices[0]
-    idx = kn1.minima_indices[-2]
     peaks, peak_index = scipy.signal.find_peaks(low_delta_x, height=0.03, plateau_size=(None, None))
-    peak = int(peak_index['right_edges'][-1])
-    peak1 = int(peak_index['left_edges'][0])
-
-    # pressure turn
-    pturn1 = np.where(final_pressure == np.min(final_pressure))[0]
 
     # turn = [i for i, e in enumerate(low_delta_x) if e < (low_delta_x[peak]-0.16) and i > peak]
     idx2 = np.where(low_delta_x == np.max(low_delta_x[idx2:-1]))[0][0]
     turn = np.where(low_delta_x == np.min(low_delta_x[idx2:-1]))[
         0]  # this is not picking where the turn around happens exactly
     turn2 = np.where(low_delta_x == np.max(low_delta_x[idx2:-1]))[0]
-
+    print(f"general_time[idx2 + INDEX_OG]: {general_time[idx2 + INDEX_OG]}")
+    print(f"general_time[turn[0]]: {general_time[turn[0]]}")
     cropped_x = delta_x[idx2 + INDEX_OG:turn[0]]
     new_x_part = flipping_data(cropped_x)
 
-    plt.plot(general_time, low_delta_x)
-    plt.plot(general_time[idx2 + INDEX_OG], low_delta_x[idx2 + INDEX_OG], "x")  # ax[2]
-    plt.plot(general_time[turn[0]], low_delta_x[turn[0]], "x")
-    plt.show()
-
+    # uncomment to see index check plot
+    # plt.plot(general_time, low_delta_x)
+    # plt.plot(general_time[idx2 + INDEX_OG], low_delta_x[idx2 + INDEX_OG], "x")  # ax[2]
+    # plt.plot(general_time[turn[0]], low_delta_x[turn[0]], "x")
+    # plt.show()
     cropped_f = filtered[idx2 + INDEX_OG:turn[0]]
-    cropped_p = fp[idx2 + INDEX_OG: turn[0]]
-    cropped_low_bdiff = low_bdiff.tolist()[idx2 - 50 + INDEX_OG:turn[0] - 50]
+    cropped_p = fp_new[idx2 + INDEX_OG: turn[0]]
+    cropped_time = general_time[idx2 + INDEX_OG: turn[0]]
+    cropped_low_bdiff = low_bdiff.tolist()[idx2 + INDEX_OG: turn[0]]
 
-    type, i = picking_type_classifier(cropped_f, cropped_p)
-    k = 0
-    while (k+15 < len(cropped_f)) and (k+15 < len(cropped_p)):
-        result = wur_event_detect(f_arr[k:k + 15], p_arr[k:k + 15])
-        print(f"k: {k}, result: {result}")
-        k += 15
-
-    fig, ax = plt.subplots(2, 1, figsize=(10, 30))
-    ax[0].plot(new_x_part, cropped_f)
-    ax[0].axvline(new_x_part[i], color='r')
-    ax[0].set_title('Norm(Force) vs. Distance Traveled')
-    ax[0].set_xlabel('Displacement (m)')
+    pick_type, pick_i = picking_type_classifier(cropped_f, cropped_p)
+    # uncomment to see cropped force and pressure
+    fig, ax = plt.subplots(4, 1, figsize=(10, 40))
+    ax[0].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
+    ax[0].plot(cropped_time, cropped_f)
+    ax[0].set_title(f'CROPPED Norm(Force): /ft300_wrench\n/wrench/force/x, y, and z')
+    ax[0].set_xlabel('Time (s)')
     ax[0].set_ylabel('Norm(Force) (N)')
 
-    ax[1].plot(new_x_part, cropped_low_bdiff)  # etime = 42550	central_diff = 42450
-    ax[1].set_title('Numerical Derivative of Norm(Force) over Distance')
-    ax[1].set_xlabel('Displacement (m)')
-    ax[1].set_ylabel('Numerical Derivative of Norm(Force)')
+    ax[1].plot(cropped_time, cropped_low_bdiff)
+    ax[1].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
+    ax[1].set_title(f'CROPPED Norm(Force): /ft300_wrench\n/wrench/force/x, y, and z')
+    ax[1].set_xlabel('Time (s)')
+    ax[1].set_ylabel('Norm(Force) (N)')
 
-    plt.subplots_adjust(top=0.9, hspace=0.29)
+    ax[2].plot(cropped_time, cropped_p)  # etime = 42550	central_diff = 42450
+    ax[2].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
+    ax[2].set_title(
+        f'CROPPED Pressure: /io_and_status_controller/io_states\n/analog_in_states[]/analog_in_states[1]/state')
+    ax[2].set_xlabel('Time (s)')
+    ax[2].set_ylabel('Pressure')
+
+    ax[3].plot(etime_joint, total_disp)  # etime = 42550	central_diff = 42450
+    ax[3].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
+    ax[3].fill_between(etime_joint, total_disp, 0,
+                       where=(etime_joint >= general_time[idx2 + INDEX_OG]) & (etime_joint <= general_time[turn[0]]),
+                       color='gray', alpha=0.5)
+    ax[3].set_title(f'Norm(Tool Pose): /tool_pose\n/transform/translation/x and y')
+    ax[3].set_xlabel('Time (s)')
+    ax[3].set_ylabel('Tool Pose')
+    # Adjust spacing
+    plt.subplots_adjust(top=0.88, hspace=0.5)
+
+    # Add a figure title with adjusted position
     fig.suptitle(
-        f'Pick Classification: {type} Pick at Time {np.round(general_time[i], 2)} Seconds (Actual Classification: __)')
+        f'Pick Classification: {pick_type} Pick at Time {np.round(np.round(cropped_time[pick_i], 2), 2)} Seconds (Actual Classification: __)',
+        y=0.95,
+        fontsize=16
+    )
 
     plt.show()
+
+
+    # print(f"picgeneral time[idx2]k_i: {pick_i}, idx2: {idx2}, general_time[pick_i]: {general_time[pick_i]}, general_time[idx2]: {general_time[idx2]}")
+
+    # uncomment for plot over displacement
+    # fig, ax = plt.subplots(4, 1, figsize=(10, 30))
+    # ax[0].plot(new_x_part, cropped_f)
+    # ax[0].axvline(new_x_part[pick_i], color='r', linestyle='dotted')
+    # ax[0].set_title('Norm(Force) vs. Distance Traveled')
+    # ax[0].set_xlabel('Displacement (m)')
+    # ax[0].set_ylabel('Norm(Force) (N)')
+    #
+    # ax[1].plot(new_x_part, cropped_low_bdiff)  # etime = 42550    central_diff = 42450
+    # ax[1].axvline(new_x_part[pick_i], color='r', linestyle='dotted')
+    # ax[1].set_title('Numerical Derivative of Norm(Force) over Distance')
+    # ax[1].set_xlabel('Displacement (m)')
+    # ax[1].set_ylabel('Numerical Derivative of Norm(Force)')
+    #
+    # ax[2].plot(new_x_part, cropped_p)
+    # ax[2].axvline(new_x_part[pick_i], color='r', linestyle='dotted')
+    # ax[2].set_title('Pressure vs. Distance Traveled')
+    # ax[2].set_xlabel('Displacement (m)')
+    # ax[2].set_ylabel('Pressure (mbar)')
+    #
+    # ax[3].plot(etime_joint, total_disp)  # etime = 42550	central_diff = 42450
+    # ax[3].axvline(general_time[pick_i], color='r', linestyle='dotted')
+    # ax[3].fill_between(etime_joint, total_disp, 0, where=(etime_joint >= general_time[idx2 + INDEX_OG]) & (etime_joint <= general_time[turn[0]]), color='gray', alpha=0.5)
+    # ax[3].set_title(f'Norm(Tool Pose): /tool_pose\n/transform/translation/x and y')
+    # ax[3].set_xlabel('Time (s)')
+    # ax[3].set_ylabel('Tool Pose')
+    #
+    #
+    # plt.subplots_adjust(top=0.9, hspace=0.29)
+    # fig.suptitle(
+    #     f'Pick Classification: {pick_type} Pick at Time {np.round(general_time[pick_i], 2)} Seconds (Actual Classification: __)')
+    #
+    # plt.show()
+
+    # uncomment for full plot over time with pick line
+    # fig, ax = plt.subplots(3, 1, figsize=(10, 30))
+    # ax[0].plot(etime_force, f_arr)
+    # ax[0].axvline(general_time[pick_i], color='r')
+    # ax[0].set_title('Norm(Force) vs. Distance Traveled')
+    # ax[0].set_xlabel('Time (s)')
+    # ax[0].set_ylabel('Norm(Force) (N)')
+    #
+    # ax[1].plot(etime_force, p_arr_new)
+    # ax[1].axvline(general_time[pick_i], color='r')
+    # ax[1].set_title('Pressure vs. Distance Traveled')
+    # ax[1].set_xlabel('Time (s)')
+    # ax[1].set_ylabel('Pressure (mbar)')
+    #
+    # ax[2].plot(etime_joint, total_disp)  # etime = 42550	central_diff = 42450
+    # ax[2].axvline(general_time[pick_i], color='r')
+    # ax[2].set_title(f'Norm(Tool Pose): /tool_pose\n/transform/translation/x and y')
+    # ax[2].set_xlabel('Time (s)')
+    # ax[2].set_ylabel('Tool Pose')
+    #
+    # plt.subplots_adjust(top=0.9, hspace=0.29)
+    # fig.suptitle(
+    #     f'Pick Classification: {pick_type} Pick at Time {np.round(np.round(general_time[pick_i], 2), 2)} Seconds (Actual Classification: __)')
+    #
+    # plt.show()
+    print(f'Pick Classification: {pick_type} Pick at Time {np.round(np.round(cropped_time[pick_i], 2), 2)} Seconds (Actual Classification: __)')
+
 def loop_through_directory_save_plots(directory_path=DIRECTORY):
     os.chdir(DIRECTORY)
 
@@ -497,4 +578,4 @@ def loop_through_directory_save_plots(directory_path=DIRECTORY):
 
 
 if __name__ == '__main__':
-    loop_through_directory_save_plots()
+    new_try()
