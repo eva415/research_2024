@@ -382,6 +382,7 @@ def filter_force(variables, param):
 
 # Calculates the moving average of the input data over a defined window size --> smoothing data
 def moving_average(final_force, window_size = 5):
+    # Calculates the moving average of the input data over a defined window size --> smoothing data
     i = 0
     filtered = []
 

@@ -259,7 +259,7 @@ def make_confusion_matrix(pos_pos, neg_neg, pos_neg, neg_pos):
 
     plt.title("Confusion Matrix", fontsize=20)
     # plt.show()
-def plot_array(array, time_array=None, xlabel="Time (s)", ylabel="Force", show=False):
+def plot_array(array, time_array=None, xlabel="Time (s)", ylabel="Force", show=True):
     # If no time array is provided, use the indices of the force_array as time
     if time_array is None:
         time_array = np.arange(len(array))
@@ -312,9 +312,10 @@ def return_displacement_array(filename):
     # get array of raw force data and normalize it
     raw_pos_array = data_pos[:, :-2]
     norm_pos_array = np.linalg.norm(raw_pos_array, axis=1)
-    # plot_array(norm_pos_array, time_array=elapsed_time_pos, ylabel="Total Displacement")
-    raw_pos_array = np.array(norm_pos_array).flatten()
-    return raw_pos_array, elapsed_time_pos
+    # plot_array(raw_pos_array[:,0], time_array=elapsed_time_pos, ylabel="Total Displacement X")
+    # plot_array(raw_pos_array[:,1], time_array=elapsed_time_pos, ylabel="Total Displacement Y")
+    norm_pos_array = np.array(norm_pos_array).flatten()
+    return norm_pos_array, elapsed_time_pos
 def return_pressure_array(filename):
     # FUNCTION TO RETRIEVE PRESSURE DATA, NORMALIZE
     # retrieve PRESSURE data from db3 file folder
@@ -452,7 +453,6 @@ def process_file_and_graph_pick_analysis(filename, pressure_threshold, force_thr
     order = 2  # sin wave can be approx represented as quadratic
 
     low_bdiff = butter_lowpass_filter(backwards_diff, cutoff, fs, order)
-
     low_delta_x = scipy.signal.savgol_filter(delta_x[:, 0], 600, 1)
 
     # selecting the correct data to use
@@ -460,49 +460,56 @@ def process_file_and_graph_pick_analysis(filename, pressure_threshold, force_thr
     idx2 = kn1.minima_indices[0]
     idx2 = np.where(low_delta_x == np.max(low_delta_x[idx2:-1]))[0][0]
     turn = np.where(low_delta_x == np.min(low_delta_x[idx2:-1]))[0]
-
     # uncomment to see index check plot
     # plt.plot(general_time, low_delta_x)
     # plt.plot(general_time[idx2 + INDEX_OG], low_delta_x[idx2 + INDEX_OG], "x")  # ax[2]
     # plt.plot(general_time[turn[0]], low_delta_x[turn[0]], "x")
     # plt.show()
-
     cropped_f = filtered[idx2 + INDEX_OG:turn[0]]
     cropped_p = fp_new[idx2 + INDEX_OG: turn[0]]
     cropped_time = general_time[idx2 + INDEX_OG: turn[0]]
     cropped_low_bdiff = low_bdiff.tolist()[idx2 + INDEX_OG: turn[0]]
 
+    # Moving average of dF/dt for plotting
+    cropped_low_bdiff = np.asarray(cropped_low_bdiff).flatten()
+    window_size = 5  # Choose an odd number, e.g., 5
+    window = np.ones(window_size) / window_size
+    moving_avg = np.convolve(cropped_low_bdiff, window, mode='same')
+
     pick_type, pick_i = picking_type_classifier(cropped_f, cropped_p, pressure_threshold, force_threshold, force_change_threshold)
 
     # plot of cropped force, cropped dF/dt, cropped pressure, and displacement
     fig, ax = plt.subplots(4, 1, figsize=(10, 40))
-    ax[0].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
-    ax[0].plot(cropped_time, cropped_f)
-    ax[0].set_title(f'CROPPED Norm(Force): /ft300_wrench\n/wrench/force/x, y, and z')
-    ax[0].set_xlabel('Time (s)')
-    ax[0].set_ylabel('Norm(Force) (N)')
 
-    ax[1].plot(cropped_time, cropped_low_bdiff)
+    ax[0].plot(general_time, low_delta_x)  # etime = 42550	central_diff = 42450
+    ax[0].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
+    ax[0].fill_between(general_time, low_delta_x, 0,
+                       where=(general_time >= cropped_time[0]) & (general_time <= cropped_time[-1]),
+                       color='red', alpha=0.1)
+    ax[0].set_title(f'FILTERED Norm(Tool Pose): /tool_pose\n/transform/translation/x and y')
+    ax[0].set_xlabel('Time (s)')
+    ax[0].set_ylabel('Tool Pose')
+
     ax[1].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
+    ax[1].plot(cropped_time, cropped_f)
     ax[1].set_title(f'CROPPED Norm(Force): /ft300_wrench\n/wrench/force/x, y, and z')
     ax[1].set_xlabel('Time (s)')
     ax[1].set_ylabel('Norm(Force) (N)')
 
-    ax[2].plot(cropped_time, cropped_p)  # etime = 42550	central_diff = 42450
+    ax[2].plot(cropped_time, moving_avg)
     ax[2].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
-    ax[2].set_title(
-        f'CROPPED Pressure: /io_and_status_controller/io_states\n/analog_in_states[]/analog_in_states[1]/state')
+    ax[2].set_title(f'MOVING AVERAGE CROPPED Norm(Force): /ft300_wrench\n/wrench/force/x, y, and z')
     ax[2].set_xlabel('Time (s)')
-    ax[2].set_ylabel('Pressure')
+    ax[2].set_ylabel('Norm(Force) (N)')
 
-    ax[3].plot(etime_joint, total_disp)  # etime = 42550	central_diff = 42450
+    ax[3].plot(cropped_time, cropped_p)  # etime = 42550	central_diff = 42450
     ax[3].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
-    ax[3].fill_between(etime_joint, total_disp, 0,
-                       where=(etime_joint >= general_time[idx2 + INDEX_OG]) & (etime_joint <= general_time[turn[0]]),
-                       color='gray', alpha=0.5)
-    ax[3].set_title(f'Norm(Tool Pose): /tool_pose\n/transform/translation/x and y')
+    ax[3].set_title(
+        f'CROPPED Pressure: /io_and_status_controller/io_states\n/analog_in_states[]/analog_in_states[1]/state')
     ax[3].set_xlabel('Time (s)')
-    ax[3].set_ylabel('Tool Pose')
+    ax[3].set_ylabel('Pressure')
+
+
     # Adjust spacing
     plt.subplots_adjust(top=0.88, hspace=0.5)
 
