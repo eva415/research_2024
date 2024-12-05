@@ -9,12 +9,6 @@ import scipy as scipy
 from kneed import KneeLocator
 from scipy.ndimage import median_filter
 
-engaged_pressure = 300.0
-disengaged_pressure = 1000.0
-failure_ratio = 0.57
-PRESSURE_THRESHOLD = engaged_pressure + failure_ratio * (disengaged_pressure - engaged_pressure) # 699
-FORCE_CHANGE_THRESHOLD = -0.75
-FORCE_THRESHOLD = 5
 INDEX_OG = 0 # originally, olivia had the index number set to 500
 
 def elapsed_time(time_array):
@@ -337,7 +331,7 @@ def return_pressure_array(filename):
     raw_pressure_array = data_p[:, :-2]
     # plot_array(raw_pressure_array, time_array=elapsed_time_pressure, ylabel="Pressure")
     return raw_pressure_array, elapsed_time_pressure
-def picking_type_classifier(force, pressure):
+def picking_type_classifier(force, pressure, pressure_threshold, force_threshold, force_change_threshold):
     def moving_average(final_force):
         window_size = 5
         i = 0
@@ -367,19 +361,19 @@ def picking_type_classifier(force, pressure):
             j += 1
 
         cropped_backward_diff = np.average(np.array(backwards_diff))
-        if filtered_force[0] >= FORCE_THRESHOLD:
-            if float(cropped_backward_diff) <= FORCE_CHANGE_THRESHOLD and avg_pressure < PRESSURE_THRESHOLD:  # this is the bitch to change if it stops working right
+        if filtered_force[0] >= force_threshold:
+            if float(cropped_backward_diff) <= force_change_threshold and avg_pressure < pressure_threshold:  # this is the bitch to change if it stops working right
                 pick_type = f'Successful'
                 # print(f'Apple has been picked! Bdiff: {cropped_backward_diff}   Pressure: {avg_pressure}.\
                 # Force: {filtered_force[0]} vs. Max Force: {np.max(force)}')
                 break
 
-            elif float(cropped_backward_diff) <= FORCE_CHANGE_THRESHOLD and avg_pressure >= PRESSURE_THRESHOLD:
+            elif float(cropped_backward_diff) <= force_change_threshold and avg_pressure >= pressure_threshold:
                 pick_type = f'Failed'
                 # print(f'Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(force)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}')
                 break
 
-            elif float(cropped_backward_diff) > FORCE_CHANGE_THRESHOLD and np.round(filtered_force[0]) >= FORCE_THRESHOLD:
+            elif float(cropped_backward_diff) > force_change_threshold and np.round(filtered_force[0]) >= force_threshold:
                 idx = idx + 1
                 i = i + 1
 
@@ -388,18 +382,18 @@ def picking_type_classifier(force, pressure):
                 i = i + 1
 
             else:
-                if float(cropped_backward_diff) > FORCE_CHANGE_THRESHOLD and np.round(filtered_force[0]) < FORCE_THRESHOLD:
+                if float(cropped_backward_diff) > force_change_threshold and np.round(filtered_force[0]) < force_threshold:
                     pick_type = f'Failed'
                     # print(f'Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(force)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}')
                     break
 
-                elif avg_pressure >= PRESSURE_THRESHOLD and np.round(filtered_force[0]) < FORCE_THRESHOLD:
+                elif avg_pressure >= pressure_threshold and np.round(filtered_force[0]) < force_threshold:
                     pick_type = f'Failed'
                     # print(f'Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(force)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}')
                     break
 
     return pick_type, i
-def process_file_and_graph_pick_analysis(filename):
+def process_file_and_graph_pick_analysis(filename, pressure_threshold, force_threshold, force_change_threshold):
     flag = False  # reset every new pick analysis
 
     f_arr, etime_force = return_force_array(filename)
@@ -478,7 +472,7 @@ def process_file_and_graph_pick_analysis(filename):
     cropped_time = general_time[idx2 + INDEX_OG: turn[0]]
     cropped_low_bdiff = low_bdiff.tolist()[idx2 + INDEX_OG: turn[0]]
 
-    pick_type, pick_i = picking_type_classifier(cropped_f, cropped_p)
+    pick_type, pick_i = picking_type_classifier(cropped_f, cropped_p, pressure_threshold, force_threshold, force_change_threshold)
 
     # plot of cropped force, cropped dF/dt, cropped pressure, and displacement
     fig, ax = plt.subplots(4, 1, figsize=(10, 40))

@@ -3,15 +3,22 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from pick_classification_functions import (make_confusion_matrix, process_file_and_graph_pick_analysis)
 
+# values to change to improve pick analysis:
+engaged_pressure = 300.0
+disengaged_pressure = 1000.0
+failure_ratio = 0.57
+PRESSURE_THRESHOLD = engaged_pressure + failure_ratio * (disengaged_pressure - engaged_pressure) # 699
+FORCE_CHANGE_THRESHOLD = -0.75
+FORCE_THRESHOLD = 5
 
 # Butterworth filter requirements
 FS = 500.0  # sample rate, Hz
 CUTOFF = 50  # desired cutoff frequency of the filter, Hz
 ORDER = 2  # sin wave can be approx represented as quadratic
-
 # ANSI escape codes for colors
 RESET = "\033[0m"
 RED = "\033[91m"
+
 
 def loop_through_directory_save_plots(directory_path, pdf_title):
     # # information for confusion matrix RIGHT NOW EXAMPLE VALUES
@@ -30,7 +37,7 @@ def loop_through_directory_save_plots(directory_path, pdf_title):
         # Check if it's a file (not a directory)
         if os.path.isdir(file_path):
             print(f"Found directory: {file_path}")
-            process_file_and_graph_pick_analysis(filename) # perform pick analysis and generate plot
+            process_file_and_graph_pick_analysis(filename, PRESSURE_THRESHOLD, FORCE_THRESHOLD, FORCE_CHANGE_THRESHOLD) # perform pick analysis and generate plot
             # uncomment to plot full data over time, no pick analysis
             # f_arr, etime_force = return_force_array(filename)
             # p_arr, etimes_pressure = return_pressure_array(filename)
