@@ -8,7 +8,7 @@ engaged_pressure = 300.0
 disengaged_pressure = 1000.0
 failure_ratio = 0.57
 PRESSURE_THRESHOLD = engaged_pressure + failure_ratio * (disengaged_pressure - engaged_pressure) # 699
-FORCE_CHANGE_THRESHOLD = -0.4
+FORCE_CHANGE_THRESHOLD = 1.0
 FORCE_THRESHOLD = 3
 
 # ANSI escape codes for colors

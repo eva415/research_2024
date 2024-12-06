@@ -345,7 +345,7 @@ def picking_type_classifier(force, pressure, pressure_threshold, force_threshold
 
         return filtered
 
-    pick_type = None
+    pick_type = f'Unclassified'
     i = 10
     while i >= 10 and i < len(force) - 10:
         idx = 0
@@ -368,18 +368,18 @@ def picking_type_classifier(force, pressure, pressure_threshold, force_threshold
 
         cropped_backward_diff = np.average(np.array(backwards_diff))
         if filtered_force[0] >= force_threshold:
-            if float(cropped_backward_diff) <= force_change_threshold and avg_pressure < pressure_threshold:  # this is the bitch to change if it stops working right
+            if float(cropped_backward_diff) >= force_change_threshold and avg_pressure < pressure_threshold:  # this is the bitch to change if it stops working right
                 pick_type = f'Successful'
                 # print(f'Apple has been picked! Bdiff: {cropped_backward_diff}   Pressure: {avg_pressure}.\
                 # Force: {filtered_force[0]} vs. Max Force: {np.max(force)}')
                 break
 
-            elif float(cropped_backward_diff) <= force_change_threshold and avg_pressure >= pressure_threshold:
+            elif avg_pressure >= pressure_threshold:
                 pick_type = f'Failed'
                 # print(f'Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(force)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}')
                 break
 
-            elif float(cropped_backward_diff) > force_change_threshold and np.round(filtered_force[0]) >= force_threshold:
+            elif float(cropped_backward_diff) < force_change_threshold and np.round(filtered_force[0]) >= force_threshold:
                 idx = idx + 1
                 i = i + 1
 
@@ -388,7 +388,7 @@ def picking_type_classifier(force, pressure, pressure_threshold, force_threshold
                 i = i + 1
 
             else:
-                if float(cropped_backward_diff) > force_change_threshold and np.round(filtered_force[0]) < force_threshold:
+                if float(cropped_backward_diff) < force_change_threshold and np.round(filtered_force[0]) < force_threshold:
                     pick_type = f'Failed'
                     # print(f'Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(force)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}')
                     break
@@ -521,9 +521,18 @@ def process_file_and_graph_pick_analysis(filename, pressure_threshold, force_thr
     plt.subplots_adjust(top=0.88, hspace=0.5)
 
     # Add a figure title with adjusted position
-    fig.suptitle(
-        f'{filename}\nPick Classification: {pick_type} Pick at Time {np.round(np.round(cropped_time[pick_i], 2), 2)} Seconds (Actual Classification: Failed)',
-        y=0.95,
-        fontsize=16
-    )
-    print(f'\tPick Classification: {pick_type} Pick at Time {np.round(np.round(cropped_time[pick_i], 2), 2)} Seconds (Actual Classification: Failed)')
+    if pick_type == 'Unclassified':
+        fig.suptitle(
+            f'{filename}\nUnable to Classify Pick\n(Actual Classification: Failed)',
+            y=0.95,
+            fontsize=16
+        )
+        print(
+            f'\tUnable to Classify Pick\n(Actual Classification: Failed)')
+    else:
+        fig.suptitle(
+            f'{filename}\nPick Classification: {pick_type} Pick at Time {np.round(np.round(cropped_time[pick_i], 2), 2)} Seconds \n(Actual Classification: Failed)',
+            y=0.95,
+            fontsize=16
+        )
+        print(f'\tPick Classification: {pick_type} Pick at Time {np.round(np.round(cropped_time[pick_i], 2), 2)} \nSeconds (Actual Classification: Failed)')
