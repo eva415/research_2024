@@ -41,7 +41,7 @@ def total_time(seconds, nseconds):
     # print(f"total_time: {total}")
 
     return total
-def butter_lowpass_filter(data, cutoff, fs, order):
+def butter_lowpass_filter(data, cutoff=50, fs=500., order=2):
     # Apply a low-pass Butterworth filter to a data array
     nyq = 0.5 * fs  # Calculate Nyquist Frequency
     normal_cutoff = cutoff / nyq  # Normalize cutoff frequency
@@ -347,12 +347,17 @@ def picking_type_classifier(force, pressure, pressure_threshold, force_threshold
 
     pick_type = None
     i = 10
-    while i >= 10:
+    while i >= 10 and i < len(force) - 10:
         idx = 0
         cropped_force = force[i - 10:i]
         filtered_force = moving_average(cropped_force)
+        # print(f"len(filtered_force): {len(filtered_force)}")
+        # print(f"filtered_force[0]: {filtered_force[0]}")
         cropped_pressure = pressure[i - 10:i]
         avg_pressure = np.average(cropped_pressure)
+        # print(f"len(cropped_pressure): {len(cropped_pressure)}")
+        # print(f"avg_pressure: {avg_pressure}")
+
 
         backwards_diff = []
         h = 2
@@ -453,7 +458,7 @@ def process_file_and_graph_pick_analysis(filename, pressure_threshold, force_thr
     order = 2  # sin wave can be approx represented as quadratic
 
     low_bdiff = butter_lowpass_filter(backwards_diff, cutoff, fs, order)
-    low_delta_x = scipy.signal.savgol_filter(delta_x[:, 0], 600, 1)
+    low_delta_x = scipy.signal.savgol_filter(delta_x[:, 0], 300, 2)
 
     # selecting the correct data to use
     kn1 = KneeLocator(general_time, low_delta_x, curve='convex', direction='decreasing')
@@ -475,7 +480,9 @@ def process_file_and_graph_pick_analysis(filename, pressure_threshold, force_thr
     window_size = 5  # Choose an odd number, e.g., 5
     window = np.ones(window_size) / window_size
     moving_avg = np.convolve(cropped_low_bdiff, window, mode='same')
-
+    # print(f"len(cropped_time): {len(cropped_time)}")
+    # print(f"len(cropped_low_bdiff): {len(cropped_low_bdiff)}")
+    # print(f"len(moving_avg): {len(moving_avg)}")
     pick_type, pick_i = picking_type_classifier(cropped_f, cropped_p, pressure_threshold, force_threshold, force_change_threshold)
 
     # plot of cropped force, cropped dF/dt, cropped pressure, and displacement
@@ -490,13 +497,13 @@ def process_file_and_graph_pick_analysis(filename, pressure_threshold, force_thr
     ax[0].set_xlabel('Time (s)')
     ax[0].set_ylabel('Tool Pose')
 
-    ax[1].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
     ax[1].plot(cropped_time, cropped_f)
+    ax[1].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
     ax[1].set_title(f'CROPPED Norm(Force): /ft300_wrench\n/wrench/force/x, y, and z')
     ax[1].set_xlabel('Time (s)')
     ax[1].set_ylabel('Norm(Force) (N)')
 
-    ax[2].plot(cropped_time, moving_avg)
+    ax[2].plot(cropped_time[:(len(moving_avg))], moving_avg)
     ax[2].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
     ax[2].set_title(f'MOVING AVERAGE CROPPED Norm(Force): /ft300_wrench\n/wrench/force/x, y, and z')
     ax[2].set_xlabel('Time (s)')
@@ -515,8 +522,8 @@ def process_file_and_graph_pick_analysis(filename, pressure_threshold, force_thr
 
     # Add a figure title with adjusted position
     fig.suptitle(
-        f'{filename}\nPick Classification: {pick_type} Pick at Time {np.round(np.round(cropped_time[pick_i], 2), 2)} Seconds (Actual Classification: __)',
+        f'{filename}\nPick Classification: {pick_type} Pick at Time {np.round(np.round(cropped_time[pick_i], 2), 2)} Seconds (Actual Classification: Failed)',
         y=0.95,
         fontsize=16
     )
-    print(f'\tPick Classification: {pick_type} Pick at Time {np.round(np.round(cropped_time[pick_i], 2), 2)} Seconds (Actual Classification: __)')
+    print(f'\tPick Classification: {pick_type} Pick at Time {np.round(np.round(cropped_time[pick_i], 2), 2)} Seconds (Actual Classification: Failed)')
