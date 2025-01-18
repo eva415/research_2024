@@ -250,15 +250,15 @@ def make_confusion_matrix(pos_pos, neg_neg, pos_neg, neg_pos):
     for (i, j), val in np.ndenumerate(matrix):
         # Choose color based on specified colors
         cell_color = "green" if colors[i][j] == "green" else "red"
-        ax.text(j, i, f'{val}', ha='center', va='center', color=cell_color, fontsize=16)
+        ax.text(j, i, f'{val}', ha='center', va='center', color=cell_color, fontsize=20)
 
     # Add gridlines for clearer separation
     ax.set_xticks(np.arange(-0.5, 2, 1), minor=True)
     ax.set_yticks(np.arange(-0.5, 2, 1), minor=True)
     ax.grid(which="minor", color="black", linestyle='-', linewidth=2)
 
-    plt.title("Confusion Matrix", fontsize=20)
-    # plt.show()
+    plt.title("Confusion Matrix", fontsize=22)
+    plt.show()
 def plot_array(array, time_array=None, xlabel="Time (s)", ylabel="Force", show=True):
     # If no time array is provided, use the indices of the force_array as time
     if time_array is None:
@@ -295,9 +295,11 @@ def return_force_array(filename):
 
     # get array of raw force data and normalize it
     raw_force_array = data_f[:, :-2]
+    fz_force_array = data_f[:, 2]
+    fz_force_array = -fz_force_array
     norm_force_array = np.linalg.norm(raw_force_array, axis=1)
-    # plot_array(norm_force_array, time_array=elapsed_time_force, ylabel="Norm Force")
-    return norm_force_array, elapsed_time_force
+    # plot_array(fz_force_array, time_array=elapsed_time_force, ylabel="Norm Force")
+    return raw_force_array, fz_force_array, elapsed_time_force
 def return_displacement_array(filename):
     # retrieve POS data from db3 file folder
     file_pos = db3_to_csv_x(filename)
@@ -402,7 +404,7 @@ def picking_type_classifier(force, pressure, pressure_threshold, force_threshold
 def process_file_and_graph_pick_analysis(filename, pressure_threshold, force_threshold, force_change_threshold):
     flag = False  # reset every new pick analysis
 
-    f_arr, etime_force = return_force_array(filename)
+    raw_f_arr, f_arr, etime_force = return_force_array(filename)
     p_arr, etimes_pressure = return_pressure_array(filename)
     total_disp, etime_joint = return_displacement_array(filename)
 
@@ -411,10 +413,13 @@ def process_file_and_graph_pick_analysis(filename, pressure_threshold, force_thr
 
     # uncomment to view full plots of data over time
     # fig, ax = plt.subplots(3, 1, figsize=(10, 30))
-    # ax[0].plot(etime_force, f_arr)
-    # ax[0].set_title(f'Norm(Force): /ft300_wrench\n/wrench/force/x, y, and z')
+    # ax[0].plot(etime_force, raw_f_arr[:, 0], label='Force X')
+    # ax[0].plot(etime_force, raw_f_arr[:, 1], label='Force Y')
+    # ax[0].plot(etime_force, raw_f_arr[:, 2], label='Force Z')
+    # ax[0].set_title(f'Raw(Force): /ft300_wrench\n/wrench/force/x, y, and z')
     # ax[0].set_xlabel('Time (s)')
-    # ax[0].set_ylabel('Norm(Force) (N)')
+    # ax[0].set_ylabel('Raw(Force) (N)')
+    # ax[0].legend()
     #
     # ax[1].plot(etime_force, p_arr_new)  # etime = 42550	central_diff = 42450
     # ax[1].set_title(f'Pressure: /io_and_status_controller/io_states\n/analog_in_states[]/analog_in_states[1]/state')
@@ -428,7 +433,7 @@ def process_file_and_graph_pick_analysis(filename, pressure_threshold, force_thr
     #
     # plt.subplots_adjust(top=0.9, hspace=0.29)
     # fig.suptitle(
-    #     f'file: {FILENAME}')
+    #     f'file: {filename}')
     #
     # plt.show()
 
@@ -485,54 +490,201 @@ def process_file_and_graph_pick_analysis(filename, pressure_threshold, force_thr
     # print(f"len(moving_avg): {len(moving_avg)}")
     pick_type, pick_i = picking_type_classifier(cropped_f, cropped_p, pressure_threshold, force_threshold, force_change_threshold)
 
-    # plot of cropped force, cropped dF/dt, cropped pressure, and displacement
-    fig, ax = plt.subplots(4, 1, figsize=(10, 40))
+    # # uncomment for ORIGINAL PLOTS
+    # # plot of cropped force, cropped dF/dt, cropped pressure, and displacement
+    # fig, ax = plt.subplots(3, 1, figsize=(10, 30))
+    # # Increase the font size for the tick labels on both axes
+    # ax[0].tick_params(axis='x', labelsize=17)  # For x-axis of the first subplot
+    # ax[0].tick_params(axis='y', labelsize=17)  # For y-axis of the first subplot
+    #
+    # ax[1].tick_params(axis='x', labelsize=17)  # For x-axis of the second subplot
+    # ax[1].tick_params(axis='y', labelsize=17)  # For y-axis of the second subplot
+    # # ax[0].plot(general_time, low_delta_x)  # etime = 42550	central_diff = 42450
+    # # ax[0].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
+    # ax[2].fill_between(general_time, low_delta_x, 0,
+    #                    where=(general_time >= cropped_time[0]) & (general_time <= cropped_time[-1]),
+    #                    color='red', alpha=0.1)
+    # # ax[0].set_title(f'FILTERED Norm(Tool Pose): /tool_pose\n/transform/translation/x and y')
+    # # ax[0].set_xlabel('Time (s)')
+    # # ax[0].set_ylabel('Tool Pose')
+    #
+    # # ax[0].plot(general_time, final_force, color='black')
+    # ax[0].plot(etime_force, raw_f_arr[:, 0], label='Force X')
+    # ax[0].plot(etime_force, raw_f_arr[:, 1], label='Force Y')
+    # ax[0].plot(etime_force, raw_f_arr[:, 2], label='Force Z')
+    # ax[0].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
+    # ax[0].set_title(f'Z-Force (N)', fontsize=20)
+    # ax[0].set_xlabel('Time (s)', fontsize=20)
+    # ax[0].set_ylabel('Wrist ||F||', fontsize=20)
+    # ax[0].legend()
+    #
+    #
+    # # ax[2].plot(cropped_time[:(len(moving_avg))], moving_avg)
+    # # ax[2].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
+    # # ax[2].set_title(f'MOVING AVERAGE CROPPED Norm(Force): /ft300_wrench\n/wrench/force/x, y, and z')
+    # # ax[2].set_xlabel('Time (s)')
+    # # ax[2].set_ylabel('Norm(Force) (N)')
+    #
+    # ax[1].plot(general_time, final_pressure, color='black')
+    # ax[1].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
+    # ax[1].set_title('Gripper pressure', fontsize=20)
+    # ax[1].set_xlabel('Time (s)', fontsize=20)
+    # ax[1].set_ylabel('Pressure (mbar)', fontsize=20)
+    #
+    # ax[2].plot(general_time, low_delta_x, color='black')
+    # ax[2].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
+    # ax[2].set_title('position', fontsize=20)
+    # ax[2].set_xlabel('Time (s)', fontsize=20)
+    # ax[2].set_ylabel('position', fontsize=20)
+    #
+    #
+    # # Adjust spacing
+    # plt.subplots_adjust(top=0.88, hspace=0.5)
+    #
+    # # Add a figure title with adjusted position
+    # if pick_type == 'Unclassified':
+    #     fig.suptitle(
+    #         f'{filename}\nUnable to Classify Pick\n(Actual Classification: Successful)',
+    #         y=0.95,
+    #         fontsize=20
+    #     )
+    #     print(
+    #         f'{filename}\n\tUnable to Classify Pick\n(Actual Classification: Successful)')
+    # else:
+    #     fig.suptitle(
+    #         f'{filename}\nPick Classification: {pick_type} Pick at Time {np.round(np.round(cropped_time[pick_i], 2), 2)} Seconds \n(Actual Classification: Successful)',
+    #         y=0.95,
+    #         fontsize=20
+    #     )
+    #     print(f'{filename}\n\tPick Classification: {pick_type} Pick at Time {np.round(np.round(cropped_time[pick_i], 2), 2)} \nSeconds (Actual Classification: Successful)')
 
-    ax[0].plot(general_time, low_delta_x)  # etime = 42550	central_diff = 42450
-    ax[0].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
-    ax[0].fill_between(general_time, low_delta_x, 0,
-                       where=(general_time >= cropped_time[0]) & (general_time <= cropped_time[-1]),
-                       color='red', alpha=0.1)
-    ax[0].set_title(f'FILTERED Norm(Tool Pose): /tool_pose\n/transform/translation/x and y')
-    ax[0].set_xlabel('Time (s)')
-    ax[0].set_ylabel('Tool Pose')
+    # # NEW PLOTS FOR PAPER
+    # fig, ax = plt.subplots(1, 3, figsize=(40, 10))
+    #
+    # # Increase the font size for the tick labels on both axes
+    # ax[0].tick_params(axis='x', labelsize=30)  # For x-axis of the first subplot
+    # ax[0].tick_params(axis='y', labelsize=30)  # For y-axis of the first subplot
+    #
+    # ax[1].tick_params(axis='x', labelsize=30)  # For x-axis of the second subplot
+    # ax[1].tick_params(axis='y', labelsize=30)  # For y-axis of the second subplot
+    #
+    # ax[2].tick_params(axis='x', labelsize=30)  # For x-axis of the third subplot
+    # ax[2].tick_params(axis='y', labelsize=30)  # For y-axis of the third subplot
+    #
+    # ax[0].plot(general_time, low_delta_x, color='black')  # etime = 42550	central_diff = 42450
+    # ax[0].set_ylim(0.38, 0.6)
+    # ax[0].set_xlim(10,70)
+    # ax[1].set_xlim(10, 70)
+    # ax[2].set_xlim(10, 70)
+    #
+    # ax[0].axvline(cropped_time[pick_i], color='r', linestyle='dashed')
+    # # ax[0].fill_between(general_time, low_delta_x, 0,
+    # #                    where=(general_time >= cropped_time[0]) & (general_time <= cropped_time[-1]),
+    # #                    color='red', alpha=0.1)
+    # general_time = np.array(general_time)
+    # ax[0].fill_between(general_time, 0, low_delta_x, where=((general_time >= 15.5) & (general_time <= 23.5)), color='#377eb8',
+    #                    alpha=0.3)
+    # ax[0].fill_between(general_time, 0, low_delta_x, where=((general_time >= 23.5) & (general_time <= 33)),
+    #                    color='#ff7f00',
+    #                    alpha=0.3)
+    # ax[0].fill_between(general_time, 0, low_delta_x, where=((general_time >= 35.5) & (general_time <= 42.5)),
+    #                    color='#4daf4a',
+    #                    alpha=0.3)
+    # ax[0].fill_between(general_time, 0, low_delta_x, where=((general_time >= 42.5) & (general_time <= 44.31)),
+    #                    color='#f781bf',
+    #                    alpha=0.3)
+    # ax[0].fill_between(general_time, 0, low_delta_x, where=((general_time >= 57) & (general_time <= 63)),
+    #                    color='#984ea3',
+    #                    alpha=0.3)
+    # ax[0].set_title(f'Gripper x-y coordinates', fontsize=35)
+    # ax[0].set_xlabel('Time (s)', fontsize=35)
+    # ax[0].set_ylabel('Position (m)', fontsize=35)
+    #
+    # ax[1].plot(general_time, final_force, color='black')
+    # final_force = np.array(final_force).flatten()
+    # ax[1].axvline(cropped_time[pick_i], color='r', linestyle='dashed')
+    # ax[1].fill_between(general_time, -1, final_force, where=((general_time >= 15.5) & (general_time <= 23.5)),
+    #                    color='#377eb8',
+    #                    alpha=0.3)
+    # ax[1].fill_between(general_time, -1, final_force, where=((general_time >= 23.5) & (general_time <= 33)),
+    #                    color='#ff7f00',
+    #                    alpha=0.3)
+    # ax[1].fill_between(general_time, -1, final_force, where=((general_time >= 35.5) & (general_time <= 42.5)),
+    #                    color='#4daf4a',
+    #                    alpha=0.3)
+    # ax[1].fill_between(general_time, -1, final_force, where=((general_time >= 42.5) & (general_time <= 44.31)),
+    #                    color='#f781bf',
+    #                    alpha=0.3)
+    # ax[1].fill_between(general_time, -1, final_force, where=((general_time >= 57) & (general_time <= 63)),
+    #                    color='#984ea3',
+    #                    alpha=0.3)
+    # ax[1].set_title(f'Wrist ||F||', fontsize=35)
+    # ax[1].set_xlabel('Time (s)', fontsize=35)
+    # ax[1].set_ylabel('Force (N)', fontsize=35)
+    #
+    # ax[2].plot(general_time, final_pressure, color='black')  # etime = 42550	central_diff = 42450
+    # final_pressure = np.array(final_pressure).flatten()
+    # ax[2].axvline(cropped_time[pick_i], color='r', linestyle='dashed')
+    # ax[2].fill_between(general_time, -1, final_pressure, where=((general_time >= 15.5) & (general_time <= 23.5)),
+    #                    color='#377eb8',
+    #                    alpha=0.3)
+    # ax[2].fill_between(general_time, -1, final_pressure, where=((general_time >= 23.5) & (general_time <= 33)),
+    #                    color='#ff7f00',
+    #                    alpha=0.3)
+    # ax[2].fill_between(general_time, -1, final_pressure, where=((general_time >= 35.5) & (general_time <= 42.5)),
+    #                    color='#4daf4a',
+    #                    alpha=0.3)
+    # ax[2].fill_between(general_time, -1, final_pressure, where=((general_time >= 42.5) & (general_time <= 44.31)),
+    #                    color='#f781bf',
+    #                    alpha=0.3)
+    # ax[2].fill_between(general_time, -1, final_pressure, where=((general_time >= 57) & (general_time <= 63)),
+    #                    color='#984ea3',
+    #                    alpha=0.3)
+    # ax[2].set_title(f'Gripper pressure', fontsize=35)
+    # ax[2].set_xlabel('Time (s)', fontsize=35)
+    # ax[2].set_ylabel('Pressure (mbar)', fontsize=35)
+    #
+    # # Adjust spacing
+    # plt.subplots_adjust(top=0.83, hspace=0.5)
 
-    ax[1].plot(cropped_time, cropped_f)
-    ax[1].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
-    ax[1].set_title(f'CROPPED Norm(Force): /ft300_wrench\n/wrench/force/x, y, and z')
-    ax[1].set_xlabel('Time (s)')
-    ax[1].set_ylabel('Norm(Force) (N)')
-
-    ax[2].plot(cropped_time[:(len(moving_avg))], moving_avg)
-    ax[2].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
-    ax[2].set_title(f'MOVING AVERAGE CROPPED Norm(Force): /ft300_wrench\n/wrench/force/x, y, and z')
-    ax[2].set_xlabel('Time (s)')
-    ax[2].set_ylabel('Norm(Force) (N)')
-
-    ax[3].plot(cropped_time, cropped_p)  # etime = 42550	central_diff = 42450
-    ax[3].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
-    ax[3].set_title(
-        f'CROPPED Pressure: /io_and_status_controller/io_states\n/analog_in_states[]/analog_in_states[1]/state')
-    ax[3].set_xlabel('Time (s)')
-    ax[3].set_ylabel('Pressure')
-
-
-    # Adjust spacing
-    plt.subplots_adjust(top=0.88, hspace=0.5)
-
-    # Add a figure title with adjusted position
-    if pick_type == 'Unclassified':
-        fig.suptitle(
-            f'{filename}\nUnable to Classify Pick\n(Actual Classification: Failed)',
-            y=0.95,
-            fontsize=16
-        )
-        print(
-            f'\tUnable to Classify Pick\n(Actual Classification: Failed)')
-    else:
-        fig.suptitle(
-            f'{filename}\nPick Classification: {pick_type} Pick at Time {np.round(np.round(cropped_time[pick_i], 2), 2)} Seconds \n(Actual Classification: Failed)',
-            y=0.95,
-            fontsize=16
-        )
-        print(f'\tPick Classification: {pick_type} Pick at Time {np.round(np.round(cropped_time[pick_i], 2), 2)} \nSeconds (Actual Classification: Failed)')
+    # # Uncomment for 2nd full page figure
+    # fig, ax = plt.subplots(1, 3, figsize=(50, 10))
+    #
+    # # Increase the font size for the tick labels on both axes
+    # ax[0].set_xlim(38, 63)
+    # ax[1].set_xlim(38, 63)
+    # ax[2].set_xlim(38, 63)
+    # ax[0].tick_params(axis='x', labelsize=30)  # For x-axis of the first subplot
+    # ax[0].tick_params(axis='y', labelsize=30)  # For y-axis of the first subplot
+    #
+    # ax[1].tick_params(axis='x', labelsize=30)  # For x-axis of the second subplot
+    # ax[1].tick_params(axis='y', labelsize=30)  # For y-axis of the second subplot
+    #
+    # ax[2].tick_params(axis='x', labelsize=30)  # For x-axis of the third subplot
+    # ax[2].tick_params(axis='y', labelsize=30)  # For y-axis of the third subplot
+    #
+    # ax[0].plot(general_time, final_force, color='black')
+    # final_force = np.array(final_force).flatten()
+    # ax[0].axvline(cropped_time[pick_i], color='r', linestyle='dashed', linewidth=2)
+    # ax[0].set_title(f'Wrist ||F||', fontsize=35)
+    # ax[0].set_xlabel('Time (s)', fontsize=35)
+    # ax[0].set_ylabel('Force (N)', fontsize=35)
+    #
+    # ax[1].plot(cropped_time[:(len(moving_avg))], moving_avg, color='black')
+    # # ax[1].set_ylim(0.38, 0.6)
+    # ax[1].axvline(cropped_time[pick_i], color='r', linestyle='dashed', linewidth=2)
+    # ax[1].axhline(1, color='b', linestyle='dashed', linewidth=2)
+    # ax[1].set_title(f'Moving average of dF(t))', fontsize=35)
+    # ax[1].set_xlabel('Time (s)', fontsize=35)
+    # ax[1].set_ylabel('Force (Ns)', fontsize=35)
+    #
+    # ax[2].plot(general_time, final_pressure, color='black')  # etime = 42550	central_diff = 42450
+    # final_pressure = np.array(final_pressure).flatten()
+    # ax[2].axvline(cropped_time[pick_i], color='r', linestyle='dashed', linewidth=2)
+    # ax[2].axhline(699, color='b', linestyle='dashed', linewidth=2)
+    # ax[2].set_title(f'Gripper pressure', fontsize=35)
+    # ax[2].set_xlabel('Time (s)', fontsize=35)
+    # ax[2].set_ylabel('Pressure (mbar)', fontsize=35)
+    #
+    # # Adjust spacing
+    # plt.subplots_adjust(top=0.83, hspace=0.5)

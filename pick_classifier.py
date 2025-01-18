@@ -1,7 +1,9 @@
 import os
+from wsgiref.validate import bad_header_value_re
+import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-from pick_classification_functions import (make_confusion_matrix, process_file_and_graph_pick_analysis)
+from pick_classification_functions import (process_file_and_graph_pick_analysis, return_force_array)
 
 # values to change to improve pick analysis:
 engaged_pressure = 300.0
@@ -66,8 +68,6 @@ def loop_through_directory_save_plots(directory_path, pdf_title):
 
             print(f"Finished directory: {file_path}\n")
 
-    # make_confusion_matrix(positive_positive, negative_negative, positive_negative, negative_positive)
-
     p = PdfPages(pdf_title)  # initialize PDF object for plots
     fig_nums = plt.get_fignums()
     figs = [plt.figure(n) for n in fig_nums]  # iterating over the numbers in list
@@ -80,8 +80,128 @@ def loop_through_directory_save_plots(directory_path, pdf_title):
     p.close()
 
 
-if __name__ == '__main__':
-    bag_directory = "/home/evakrueger/Downloads/Rosbag_fails"
-    pdf_title = "failed_pick_classifier_netherlands_dec5.pdf"
+def detect_outliers(data, threshold=20):
+    outlier_indices = np.where(np.abs(data) > threshold)[0]
+    return outlier_indices
+def remove_outliers(data, outlier_indices):
+    cleaned_data = data.copy()
+    for idx in outlier_indices:
+        # Check bounds to ensure we can take the previous and next samples
+        if idx > 0 and idx < len(data) - 1:
+            cleaned_data[idx] = (data[idx - 1] + data[idx + 1]) / 2
+        elif idx == 0:  # Handle edge case at the start
+            cleaned_data[idx] = data[idx + 1]
+        elif idx == len(data) - 1:  # Handle edge case at the end
+            cleaned_data[idx] = data[idx - 1]
+    return cleaned_data
+# graph for figure 6:
+def graph_all_forces(directory_path, pdf_title):
+    os.chdir(directory_path)
 
-    loop_through_directory_save_plots(bag_directory, pdf_title)
+    # Loop through all files in the directory
+    all_fx = []
+    all_fy = []
+    all_fz = []
+    fig, ax = plt.subplots(figsize=(10, 10))
+    for filename in os.listdir(directory_path):
+        file_path = os.path.join(directory_path, filename)
+        # Check if it's a file (not a directory)
+        if os.path.isdir(file_path):
+            print(f"Found directory: {file_path}")
+            try:
+                raw_f_arr, f_arr, etime_force = return_force_array(filename)
+
+                x_outliers = detect_outliers(raw_f_arr[:, 0])
+                x_forces_filtered = remove_outliers(raw_f_arr[:, 0], x_outliers)
+                all_fx.append(max(abs(x_forces_filtered)))
+
+                y_outliers = detect_outliers(raw_f_arr[:, 1])
+                y_forces_filtered = remove_outliers(raw_f_arr[:, 1], y_outliers)
+                all_fy.append(max(abs(y_forces_filtered)))
+
+                z_forces = raw_f_arr[:, 2]
+                all_fz.append(max(abs(z_forces)))
+
+            except Exception as e:
+                print(f"\tERROR: {e}")
+            # print(np.arange(len(all_fx)))
+            plt.tick_params(axis='x', labelsize=30)  # For x-axis of the first subplot
+            plt.tick_params(axis='y', labelsize=30)  # For y-axis of the first subplot
+            plt.xlim(0, 105)
+            plt.bar(np.arange(len(all_fx)), all_fx, color='#ff7f00')
+            plt.bar(np.arange(len(all_fy))+35, all_fy, color='#4daf4a')
+            plt.bar(np.arange(len(all_fz))+70, all_fz, color='#984ea3')
+            plt.text(10, -5, r"$F_x$", ha='center', fontsize=30)
+            plt.text(50, -5, r"$F_y$", ha='center', fontsize=30)
+            plt.text(90, -5, r"$F_z$", ha='center', fontsize=30)
+
+            plt.ylabel('Max Force (N)', fontsize=35)
+
+            print(f"Finished directory: {file_path}\n")
+
+
+    p = PdfPages(pdf_title)  # initialize PDF object for plots
+    fig_nums = plt.get_fignums()
+    figs = [plt.figure(n) for n in fig_nums]  # iterating over the numbers in list
+    for fig in figs:
+        # and save/append that figure to the pdf file
+        fig.savefig(p, format='pdf')
+        plt.close(fig)
+
+    # close the object to save the pdf
+    p.close()
+    return None
+
+def parallel_line_plot(directory_path, pdf_title):
+    os.chdir(directory_path)
+    # Generate some sample data
+    user_pick_time = np.array([
+    44.44, 58.9, 38.22, 47.77, 59.31, 73.52, 44.59, 47.9, 37.32, 45.88,
+    41.97, 63.63, 46.19, 51.78, 38.33, 41.26, 50.4, 24.13, 37.01,
+    25.44, 25.37, 26.6, 28.51, 25.21, 46.41, 30.48, 26.51, 27.08
+])  # Actual pick time
+    estimated_pick_time = np.array([
+    44.13, 58.65, 37.86, 47.11, 58.98, 73.11, 44.18, 47.48, 36.74, 44.75,
+    41.72, 61.38, 44.7, 51.26, 37.86, 40.02, 48.29, 23.62, 36.61, 25.02,
+    24.82, 26.21, 27.88, 24.98, 45.98, 30.06, 25.92, 26.63
+])  # Estimated pick time
+
+    # Stack the paired data into a 2D array where each column represents one dataset
+    data = np.stack((user_pick_time, estimated_pick_time), axis=1)
+
+    # Create the figure and axes
+    fig, ax = plt.subplots(figsize=(12, 12))
+
+    plt.tick_params(axis='x', labelsize=30)  # For x-axis of the first subplot
+    # Plot the paired data as dots connected by lines
+    for i in range(len(user_pick_time)):
+        ax.plot([user_pick_time[i], estimated_pick_time[i]], [i, i], 'k-', lw=1)  # Line between the two dots
+        ax.plot(user_pick_time[i], i, 'o', markersize=10, color="#4daf4a", label=f'Pick time' if i == 0 else "")  # dot for pick time
+        ax.plot(estimated_pick_time[i], i, 'o', markersize=10, color="#984ea3",
+                label=f'Estimated time' if i == 0 else "")  # dot for estimated pick time
+
+    # Set labels and title
+    ax.set_xlabel('Time', fontsize=35)
+    ax.set_title('User Pick Time vs Classifier Pick Time', fontsize=35)
+    ax.yaxis.set_visible(False)
+    ax.legend(fontsize=30)
+
+    p = PdfPages(pdf_title)  # initialize PDF object for plots
+    fig_nums = plt.get_fignums()
+    figs = [plt.figure(n) for n in fig_nums]  # iterating over the numbers in list
+    for fig in figs:
+        # and save/append that figure to the pdf file
+        fig.savefig(p, format='pdf')
+        plt.close(fig)
+
+    # close the object to save the pdf
+    p.close()
+    return None
+
+if __name__ == '__main__':
+    bag_directory = "/home/evakrueger/Downloads/test_new_fig"
+    pdf_title = "fig_new.pdf"
+
+    # loop_through_directory_save_plots(bag_directory, pdf_title)
+    # graph_all_forces(bag_directory, pdf_title)
+    parallel_line_plot(bag_directory, pdf_title)
