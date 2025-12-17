@@ -2,7 +2,7 @@ import os
 import subprocess
 
 # Replace 'your_folder_path' with the path to your main folder
-your_folder_path = "/home/evakrueger/Downloads/all_picks"
+your_folder_path = "/home/evakrueger/Documents/september_2025/f_t_testing"
 
 
 def reindex_ros_bags(folder_path):

@@ -3,15 +3,17 @@ from wsgiref.validate import bad_header_value_re
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-from pick_classification_functions import (process_file_and_graph_pick_analysis, return_force_array)
+from rf_pick_classification_funcs import (process_file_and_graph_pick_analysis, return_force_array, return_pressure_array)
 
 # values to change to improve pick analysis:
-engaged_pressure = 300.0
-disengaged_pressure = 1000.0
+engaged_pressure = -56
+# disengaged_pressure = -50
 failure_ratio = 0.57
-PRESSURE_THRESHOLD = engaged_pressure + failure_ratio * (disengaged_pressure - engaged_pressure) # 699
+PRESSURE_THRESHOLD =  -56
 FORCE_CHANGE_THRESHOLD = 1.0
-FORCE_THRESHOLD = 3
+FORCE_THRESHOLD = 20
+TOF_THRESHOLD = 55
+FLEX_THRESHOLD = 20
 
 # ANSI escape codes for colors
 RESET = "\033[0m"
@@ -34,39 +36,40 @@ def loop_through_directory_save_plots(directory_path, pdf_title):
         file_path = os.path.join(directory_path, filename)
         # Check if it's a file (not a directory)
         if os.path.isdir(file_path):
-            print(f"Found directory: {file_path}")
+            # print(f"Found directory: {file_path}")
             try:
-                process_file_and_graph_pick_analysis(filename, PRESSURE_THRESHOLD, FORCE_THRESHOLD, FORCE_CHANGE_THRESHOLD) # perform pick analysis and generate plot
+                process_file_and_graph_pick_analysis(filename, PRESSURE_THRESHOLD, FORCE_THRESHOLD, FORCE_CHANGE_THRESHOLD, TOF_THRESHOLD, FLEX_THRESHOLD) # perform pick analysis and generate plot
             except Exception as e:
                 print(f"\tERROR: {e}")
-            # uncomment to plot full data over time, no pick analysis
-            # f_arr, etime_force = return_force_array(filename)
+            # # uncomment to plot full data over time, no pick analysis
+            # f_arr, fz_arr, etime_force = return_force_array(filename)
             # p_arr, etimes_pressure = return_pressure_array(filename)
             # total_disp, etime_joint = return_displacement_array(filename)
-            #
+            
             # # PLOT FIGS
             # fig, ax = plt.subplots(3, 1, figsize=(10, 30))
-            # ax[0].plot(etime_force, f_arr)
+            # norm_f_arr = np.linalg.norm(f_arr, axis=1)
+            # ax[0].plot(etime_force, norm_f_arr)
             # ax[0].set_title(f'Norm(Force): /ft300_wrench\n/wrench/force/x, y, and z')
             # ax[0].set_xlabel('Displacement (m)')
             # ax[0].set_ylabel('Norm(Force) (N)')
-            #
+            
             # ax[1].plot(etimes_pressure, p_arr)  # etime = 42550	central_diff = 42450
             # ax[1].set_title(
             #     f'Pressure: /io_and_status_controller/io_states\n/analog_in_states[]/analog_in_states[1]/state')
             # ax[1].set_xlabel('Displacement (m)')
             # ax[1].set_ylabel('Pressure')
-            #
+            
             # ax[2].plot(etime_joint, total_disp)  # etime = 42550	central_diff = 42450
             # ax[2].set_title(f'Tool Pose (z-axis): /tool_pose\n/transform/translation/z')
             # ax[2].set_xlabel('Displacement (m)')
             # ax[2].set_ylabel('Z-position')
-            #
+            
             # plt.subplots_adjust(top=0.9, hspace=0.29)
             # fig.suptitle(
             #     f'file: {filename}')
 
-            print(f"Finished directory: {file_path}\n")
+            # print(f"Finished directory: {file_path}\n")
 
     p = PdfPages(pdf_title)  # initialize PDF object for plots
     fig_nums = plt.get_fignums()
@@ -199,9 +202,11 @@ def parallel_line_plot(directory_path, pdf_title):
     return None
 
 if __name__ == '__main__':
-    bag_directory = "/home/evakrueger/Downloads/test_new_fig"
-    pdf_title = "fig_new.pdf"
+    # bag_directory = "/home/imml/Desktop/successful_picks"
+    bag_directory = "/home/imml/Desktop/failed_picks"
+    pdf_title = "fail_test.pdf"
+    # pdf_title = "success_test.pdf"
 
-    # loop_through_directory_save_plots(bag_directory, pdf_title)
+    loop_through_directory_save_plots(bag_directory, pdf_title)
     # graph_all_forces(bag_directory, pdf_title)
-    parallel_line_plot(bag_directory, pdf_title)
+    # parallel_line_plot(bag_directory, pdf_title)

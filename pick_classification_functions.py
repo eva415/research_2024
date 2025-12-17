@@ -6,685 +6,712 @@ from rosidl_runtime_py.utilities import get_message
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy as scipy
-from kneed import KneeLocator
 from scipy.ndimage import median_filter
 
-INDEX_OG = 0 # originally, olivia had the index number set to 500
+
+INDEX_OG = 0  # set to 100 generally, 0 for exception cases
+
+
 
 def elapsed_time(time_array):
-    # Calculate the elapsed time relative to the first timestamp in an array
-    # Convert to a NumPy array if it's not already (in case a list is passed)
     time_array = np.array(time_array)
-
-    # Check if time_array is not empty
     if time_array.size == 0:
         print("Error: time_array is empty.")
         return None
+    return time_array - time_array[0]
 
-    # Subtract the first entry from each element (vectorized operation)
-    elapsed_t = time_array - time_array[0]
-
-    # Optionally print for debugging
-    # print(f"elapsed_time: {elapsed_t}")
-
-    return elapsed_t
 def total_time(seconds, nseconds):
-    # Combine seconds and nanoseconds arrays into a single timestamp in seconds
-    # Convert seconds and nanoseconds to total time in seconds using vectorized operations
     seconds = np.array(seconds, dtype=np.float64)
     nseconds = np.array(nseconds, dtype=np.float64)
+    return seconds + (nseconds / 1e9)
 
-    # Convert nanoseconds to seconds and add to seconds
-    total = seconds + (nseconds / 1e9)
-
-    # Optionally print for debugging
-    # print(f"total_time: {total}")
-
-    return total
 def butter_lowpass_filter(data, cutoff=50, fs=500., order=2):
-    # Apply a low-pass Butterworth filter to a data array
-    nyq = 0.5 * fs  # Calculate Nyquist Frequency
-    normal_cutoff = cutoff / nyq  # Normalize cutoff frequency
-    # Get filter coefficients
+    nyq = 0.5 * fs
+    normal_cutoff = cutoff / nyq
     b, a = butter(order, normal_cutoff, btype='low', analog=False)
-    y = filtfilt(b, a, data, padlen=0)  # Apply the filter
+    y = filtfilt(b, a, data, padlen=0)
     return y
-def match_times(t1, t2, x1, x2):
-    # Match timestamps and interpolate data arrays based on a common timestamp array
-    all_timestamps = sorted(set(t1).union(set(t2)))  # Combine and sort unique timestamps
-    new_x1 = np.zeros([len(all_timestamps), x1.shape[1]])
-    new_x2 = np.zeros([len(all_timestamps), x2.shape[1]])
 
-    # Interpolate each column of x1 and x2 data to match common timestamps
-    x1_num_cols = np.size(x1, 1)
-    for i in range(x1_num_cols):
-        new_x1[:, i] = np.interp(all_timestamps, t1, x1[:, i])
-
-    x2_num_cols = np.size(x2, 1)
-    for i in range(x2_num_cols):
-        new_x2[:, i] = np.interp(all_timestamps, t2, x2[:, i])
-
-    return new_x1, new_x2, all_timestamps
 def filter_force(variables, param):
-    # Applies a median filter to each variable --> noise reduction
-    # Median Filter
     filtered = []
-    for i in range(len(variables)):
-        temp = median_filter(variables[i], param)
-        filtered.append(temp)
-
+    for var in variables:
+        filtered.append(median_filter(var, param))
     return filtered
+
 def db3_to_csv_f(folder_name):
-    # Reads a .db3 ros2 bag file and extracts relevant force data to a csv file
-    # Convert folder_name to a string to use as the base file name
     name = str(folder_name)
-    # print(name)
-    # Initialize an empty list to store data from each message
     df = []
 
-    # Pass the folder name containing the metadata.yaml file to Reader
     with Reader(name) as reader:
-        # Iterate over each message in the bag file
         for connection, timestamp, rawdata in reader.messages():
-            # Check if the message is from the wrench topic (force-torque sensor)
-            if connection.topic == '/ft300_wrench':
-                # Deserialize the message data using CDR (Common Data Representation) format
+            if connection.topic == '/force_torque_sensor_broadcaster/wrench':
                 msg = deserialize_cdr(rawdata, connection.msgtype)
-
-                # Extract force components along x, y, and z axes
                 Fx = msg.wrench.force.x
                 Fy = msg.wrench.force.y
                 Fz = msg.wrench.force.z
-
-                # Extract timestamp (seconds and nanoseconds) from message header
                 secs = msg.header.stamp.sec
                 nsecs = msg.header.stamp.nanosec
+                df.append([Fx, Fy, Fz, secs, nsecs])
 
-                # Compile extracted data into a list
-                new_values = [Fx, Fy, Fz, secs, nsecs]
-                # Append this list to the main data list
-                df.append(new_values)
-
-    # Check if data was collected before attempting to save to CSV
     if df:
-        # Save the accumulated data to a CSV file using the provided folder_name as the file name
-        # print(df)
         np.savetxt(name + 'force.csv', np.array(df), delimiter=",")
     else:
-        print("No data found in the specified topic.")
-
-    # Return the folder name as a confirmation of successful save
+        print("No force data found in the specified topic.")
     return name + 'force'
+
 def db3_to_csv_p(folder_name):
-    # Reads a .db3 ros2 bag file and extracts relevant pressure data to a csv file
-    # Convert folder_name to a string to use as the base file name
     name = str(folder_name)
-    # print(name)
-    # Initialize an empty list to store data from each message
     df = []
 
-    # Pass the folder name containing the metadata.yaml file to Reader
     with Reader(name) as reader:
-        # Iterate over each message in the bag file
         for connection, timestamp, rawdata in reader.messages():
-            # Check if the message is from the wrench topic (force-torque sensor)
-            if connection.topic == '/io_and_status_controller/io_states':
-                # Deserialize the message data using CDR (Common Data Representation) format
-                # msg = deserialize_cdr(rawdata, connection.msgtype)
-                # print(f"RAW DATA: {rawdata}")
-                msg_type = get_message('ur_msgs/msg/IOStates')
+            if connection.topic == '/vacuum_pressure':
+                msg_type = get_message('std_msgs/msg/Float32')
                 msg = deserialize_message(rawdata, msg_type)
-                # print(f"MSG: {msg}")
-                # Extract pressure components
-                # P0 = msg.analog_in_states[0].state
-                # P0 = P0*(-100.) + 1000.
-                # print(f"P0: {P0}")
-                P1 = msg.analog_in_states[1].state
-                P1 = P1*(-100.) + 1000.
-                # print(f"P1: {P1}")
+                P = float(msg.data)
+                secs = timestamp // 1_000_000_000
+                nsecs = timestamp % 1_000_000_000
+                df.append([P, secs, nsecs])
 
-
-                # Extract timestamp (seconds and nanoseconds) from message header
-                secs = timestamp // 1_000_000_000  # Get the seconds part
-                nsecs = timestamp % 1_000_000_000  # Get the nanoseconds part
-                # print(f"secs: {secs}")
-                # print(f"nsecs: {nsecs}\n")
-                #
-                # Compile extracted data into a list
-                new_values = [P1, secs, nsecs]
-                # Append this list to the main data list
-                df.append(new_values)
-
-    # Check if data was collected before attempting to save to CSV
     if df:
-        # print(f"Dimensions of df: {len(df)} rows, {len(df[0])} columns")
-        # Save the accumulated data to a CSV file using the provided folder_name as the file name
         np.savetxt(name + 'pressure.csv', np.array(df), delimiter=",")
-        # plt.figure(figsize=(10, 6))
-        # # plt.plot([row[2] for row in df], label='Seconds', color='blue', alpha=0.7)
-        # plt.plot([row[0] for row in df], label='Pressure0', color='red', alpha=0.7)
-        # plt.plot([row[1] for row in df], label='Pressure1', color='blue', alpha=0.7)
-        # plt.plot([row[2] for row in df], label='secs', color='green', alpha=0.7)
-        # plt.plot([row[3] for row in df], label='nsecs', color='black', alpha=0.7)
-        # plt.xlabel('Index')
-        # plt.ylabel('Time')
-        # plt.title('Time Series: Seconds and Nanoseconds')
-        # plt.legend()
-        # plt.grid(True)
-        # plt.tight_layout()
-        #
-        # # Display the plot instead of saving it
-        # plt.show()  # This will pop up the plot in a window
     else:
-        print("No data found in the specified topic.")
-
-    # Return the folder name as a confirmation of successful save
+        print("No pressure data found in the specified topic.")
     return name + 'pressure'
-def db3_to_csv_x(folder_name):
-    # Reads a .db3 ros2 bag file and extracts relevant position data to a csv file
-    # Convert folder_name to a string to use as the base file name
+
+def db3_to_csv_tof(folder_name):
     name = str(folder_name)
-    # print(name)
-    # Initialize an empty list to store data from each message
     df = []
 
-    # Pass the folder name containing the metadata.yaml file to Reader
     with Reader(name) as reader:
-        # Iterate over each message in the bag file
         for connection, timestamp, rawdata in reader.messages():
-            # Check if the message is from the wrench topic (force-torque sensor)
-            if connection.topic == '/tool_pose':
-                # Deserialize the message data using CDR (Common Data Representation) format
-                msg = deserialize_cdr(rawdata, connection.msgtype)
-                # Extract force components along x, y, and z axes
-                x_pos = msg.transform.translation.x
-                y_pos = msg.transform.translation.y
-                # z_pos = msg.transform.translation.z
+            if connection.topic == '/tof_sensor_data':    # <--- TOF topic from your metadata
+                msg_type = get_message('std_msgs/msg/Int32')
+                msg = deserialize_message(rawdata, msg_type)
 
-                # Extract timestamp (seconds and nanoseconds) from message header
-                secs = msg.header.stamp.sec
-                nsecs = msg.header.stamp.nanosec
+                tof = int(msg.data)
 
-                # Compile extracted data into a list
-                new_values = [x_pos, y_pos, secs, nsecs]
-                # Append this list to the main data list
-                df.append(new_values)
-                # print(new_values)
+                # Timestamp reconstruction from rosbag2 (just like pressure)
+                secs = timestamp // 1_000_000_000
+                nsecs = timestamp % 1_000_000_000
 
-    # Check if data was collected before attempting to save to CSV
+                df.append([tof, secs, nsecs])
+
     if df:
-        # Save the accumulated data to a CSV file using the provided folder_name as the file name
-        # print(df)
-        np.savetxt(name + 'pos.csv', np.array(df), delimiter=",")
+        np.savetxt(name + 'tof.csv', np.array(df), delimiter=",")
     else:
-        print("No data found in the specified topic.")
+        print("⚠ No TOF data found in this bag.")
 
-    # Return the folder name as a confirmation of successful save
-    return name + 'pos'
-def make_confusion_matrix(pos_pos, neg_neg, pos_neg, neg_pos):
-    # Define the confusion matrix data
-    matrix = np.array([[pos_pos, pos_neg],
-                       [neg_pos, neg_neg]])
+    return name + 'tof'
 
-    # Define color map for each cell
-    colors = [["green", "red"],
-              ["red", "green"]]
+def db3_to_csv_flex(folder_name):
+    name = str(folder_name)
+    rows = []
 
-    # Create the plot
-    fig, ax = plt.subplots()
-    ax.matshow([[1, 2], [3, 4]], cmap="Greys", alpha=0.1)  # Light background colors
+    with Reader(name) as reader:
+        for connection, timestamp, rawdata in reader.messages():
+            if connection.topic == '/flex_sensor_data':
+                
+                msg_type = get_message('std_msgs/msg/Float32MultiArray')
+                msg = deserialize_message(rawdata, msg_type)
 
-    # Set tick locations to match the labels
-    ax.set_xticks([0, 1])
-    ax.set_yticks([0, 1])
+                flex_values = np.array(msg.data, dtype=float)
 
-    # Set tick labels for each axis
-    ax.set_xticklabels(['Positive', 'Negative'], fontsize=12)
-    ax.set_yticklabels(['Positive', 'Negative'], fontsize=12)
+                # Your method → single collapse indicator
+                flex_norm = np.linalg.norm(flex_values)
 
-    # Set x-axis and y-axis labels
-    ax.set_xlabel('Predicted Label', fontsize=14)
-    ax.set_ylabel('True Label', fontsize=14)
+                secs  = timestamp // 1_000_000_000
+                nsecs = timestamp % 1_000_000_000
 
-    # Place each value in the corresponding cell
-    for (i, j), val in np.ndenumerate(matrix):
-        # Choose color based on specified colors
-        cell_color = "green" if colors[i][j] == "green" else "red"
-        ax.text(j, i, f'{val}', ha='center', va='center', color=cell_color, fontsize=20)
+                # Store timestamp, all raw flex channels, and the L2 norm
+                rows.append([secs, nsecs] + flex_values.tolist() + [flex_norm])
 
-    # Add gridlines for clearer separation
-    ax.set_xticks(np.arange(-0.5, 2, 1), minor=True)
-    ax.set_yticks(np.arange(-0.5, 2, 1), minor=True)
-    ax.grid(which="minor", color="black", linestyle='-', linewidth=2)
+    if not rows:
+        print("No flex sensor data found in this bag.")
+        return None
 
-    plt.title("Confusion Matrix", fontsize=22)
-    plt.show()
-def plot_array(array, time_array=None, xlabel="Time (s)", ylabel="Force", show=True):
-    # If no time array is provided, use the indices of the force_array as time
-    if time_array is None:
-        time_array = np.arange(len(array))
+    # Convert to array and pad uneven rows (unlikely but safe)
+    max_len = max(len(r) for r in rows)
+    padded = [r + [np.nan] * (max_len - len(r)) for r in rows]
+    data = np.array(padded)
 
-    # Create the plot
-    plt.plot(time_array, array, label=ylabel, color="b")
+    # Build header
+    num_flex = max_len - 3  # subtract time + flex_norm
+    header = ["sec", "nsec"] + [f"flex_{i}" for i in range(num_flex - 1)] + ["flex_norm"]
 
-    # Add titles and labels
-    plt.title(f"{ylabel} vs {xlabel}")
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
+    out_path = name + "_flex_norm.csv"
 
-    # Display a grid for better readability
-    plt.grid(True)
+    np.savetxt(out_path, data, delimiter=",", header=",".join(header), comments="")
+    # print(f"Saved flex norm CSV: {out_path}")
 
-    # Optionally display the legend
-    plt.legend()
+    return out_path
 
-    # Show the plot
-    if show:
-        plt.show()
+def return_tof_array(filename):
+    file_t = db3_to_csv_tof(filename)
+    data_t = np.loadtxt('./' + file_t + '.csv', dtype=float, delimiter=',')
+
+    raw_sec_array_t = data_t[:, -2]
+    raw_nsec_array_t = data_t[:, -1]
+
+    total_tof_time = total_time(raw_sec_array_t, raw_nsec_array_t)
+    elapsed_tof_time = elapsed_time(total_tof_time)
+
+    raw_tof_values = data_t[:, :-2].squeeze()   # (remove timestamps)
+
+    return raw_tof_values, elapsed_tof_time
+
 def return_force_array(filename):
-    # FUNCTION TO RETRIEVE FORCE DATA, NORMALIZE
-    # retrieve FORCE data from db3 file folder
     file_f = db3_to_csv_f(filename)
     data_f = np.loadtxt('./' + file_f + '.csv', dtype="float", delimiter=',')
-
-    # get seconds and nanoseconds, process for total and elapsed time
     raw_sec_array_f = data_f[:, -2]
     raw_nsec_array_f = data_f[:, -1]
     total_time_force = total_time(raw_sec_array_f, raw_nsec_array_f)
     elapsed_time_force = elapsed_time(total_time_force)
-
-    # get array of raw force data and normalize it
     raw_force_array = data_f[:, :-2]
-    fz_force_array = data_f[:, 2]
-    fz_force_array = -fz_force_array
-    norm_force_array = np.linalg.norm(raw_force_array, axis=1)
-    # plot_array(fz_force_array, time_array=elapsed_time_force, ylabel="Norm Force")
+    fz_force_array = -raw_force_array[:, 2]
     return raw_force_array, fz_force_array, elapsed_time_force
-def return_displacement_array(filename):
-    # retrieve POS data from db3 file folder
-    file_pos = db3_to_csv_x(filename)
-    data_pos = np.loadtxt('./' + file_pos + '.csv', dtype="float", delimiter=',')
 
-    # get seconds and nanoseconds, process for total and elapsed time
-    raw_sec_array_pos = data_pos[:, -2]
-    raw_nsec_array_pos = data_pos[:, -1]
-    total_time_pos = total_time(raw_sec_array_pos, raw_nsec_array_pos)
-    elapsed_time_pos = elapsed_time(total_time_pos)
-
-    # get array of raw force data and normalize it
-    raw_pos_array = data_pos[:, :-2]
-    norm_pos_array = np.linalg.norm(raw_pos_array, axis=1)
-    # plot_array(raw_pos_array[:,0], time_array=elapsed_time_pos, ylabel="Total Displacement X")
-    # plot_array(raw_pos_array[:,1], time_array=elapsed_time_pos, ylabel="Total Displacement Y")
-    norm_pos_array = np.array(norm_pos_array).flatten()
-    return norm_pos_array, elapsed_time_pos
 def return_pressure_array(filename):
-    # FUNCTION TO RETRIEVE PRESSURE DATA, NORMALIZE
-    # retrieve PRESSURE data from db3 file folder
     file_p = db3_to_csv_p(filename)
     data_p = np.loadtxt('./' + file_p + '.csv', dtype="float", delimiter=',')
-
-    # get seconds and nanoseconds, process for total and elapsed time
     raw_sec_array_p = data_p[:, -2]
     raw_nsec_array_p = data_p[:, -1]
     total_time_pressure = total_time(raw_sec_array_p, raw_nsec_array_p)
     elapsed_time_pressure = elapsed_time(total_time_pressure)
-
-    # get array of raw force data and normalize it
     raw_pressure_array = data_p[:, :-2]
-    # plot_array(raw_pressure_array, time_array=elapsed_time_pressure, ylabel="Pressure")
     return raw_pressure_array, elapsed_time_pressure
-def picking_type_classifier(force, pressure, pressure_threshold, force_threshold, force_change_threshold):
+
+def return_flex_array(filename, smoothing_method='median', param=5):
+    """
+    Returns smoothed flex norm and elapsed time.
+    smoothing_method: 'median' or 'butter'
+    param: window size for median, cutoff freq for butter
+    """
+    # Convert rosbag → CSV (your flex_norm version)
+    file_flex = db3_to_csv_flex(filename)
+
+    if file_flex is None:
+        print("No flex file returned.")
+        return None, None
+
+    # Load CSV
+    data_flex = np.loadtxt('./' + file_flex, dtype=float, delimiter=',', skiprows=1)
+
+    # Last column = flex_norm
+    flex_norm = data_flex[:, -1]
+
+    # Extract timestamps
+    raw_sec_array_flex  = data_flex[:, 0]
+    raw_nsec_array_flex = data_flex[:, 1]
+
+    # Compute time arrays
+    total_flex_time   = total_time(raw_sec_array_flex, raw_nsec_array_flex)
+    elapsed_flex_time = elapsed_time(total_flex_time)
+
+    # --- Smooth flex signal ---
+    if smoothing_method == 'median':
+        flex_norm_smooth = median_filter(flex_norm, size=param)
+    elif smoothing_method == 'butter':
+        flex_norm_smooth = butter_lowpass_filter(flex_norm, cutoff=param, fs=500, order=2)
+    else:
+        flex_norm_smooth = flex_norm  # no smoothing
+
+    return flex_norm_smooth, elapsed_flex_time
+
+def picking_type_classifier_f_p(force, pressure, pressure_threshold, force_threshold, force_change_threshold):
     def moving_average(final_force):
         window_size = 5
-        i = 0
         filtered = []
-
-        while i < len(final_force) - window_size + 1:
-            window_average = round(np.sum(final_force[i:i + window_size]) / window_size, 2)
-            filtered.append(window_average)
-            i += 1
-
+        for k in range(len(final_force) - window_size + 1):
+            filtered.append(round(np.sum(final_force[k:k + window_size]) / window_size, 2))
         return filtered
 
-    pick_type = f'Unclassified'
+    count = 0
+    wait_for_pressure_sync = 10
+    pick_type = 'Unclassified'
     i = 10
-    while i >= 10 and i < len(force) - 10:
-        idx = 0
+    pick_start = None   # <-- record index where spike was first detected
+
+    while i < len(force) - 10:
         cropped_force = force[i - 10:i]
         filtered_force = moving_average(cropped_force)
-        # print(f"len(filtered_force): {len(filtered_force)}")
-        # print(f"filtered_force[0]: {filtered_force[0]}")
         cropped_pressure = pressure[i - 10:i]
         avg_pressure = np.average(cropped_pressure)
-        # print(f"len(cropped_pressure): {len(cropped_pressure)}")
-        # print(f"avg_pressure: {avg_pressure}")
 
-
+        # compute backward derivative on filtered_force (keep same logic)
         backwards_diff = []
         h = 2
-        for j in range(2 * h, (len(filtered_force))):
-            diff = ((3 * filtered_force[j]) - (4 * filtered_force[j - h]) + filtered_force[j - (2 * h)]) / (2 * h)
+        for j in range(2 * h, len(filtered_force)):
+            diff = ((3 * filtered_force[j]) - (4 * filtered_force[j - h]) + filtered_force[j - 2*h]) / (2 * h)
             backwards_diff.append(diff)
-            j += 1
+        cropped_backward_diff = np.average(backwards_diff) if backwards_diff else 0.0
 
-        cropped_backward_diff = np.average(np.array(backwards_diff))
-        if filtered_force[0] >= force_threshold:
-            if float(cropped_backward_diff) >= force_change_threshold and avg_pressure < pressure_threshold:  # this is the bitch to change if it stops working right
-                pick_type = f'Successful'
-                # print(f'Apple has been picked! Bdiff: {cropped_backward_diff}   Pressure: {avg_pressure}.\
-                # Force: {filtered_force[0]} vs. Max Force: {np.max(force)}')
-                break
+        if filtered_force and filtered_force[0] <= force_threshold:
+            if cropped_backward_diff >= force_change_threshold and avg_pressure < pressure_threshold:
+                # first time we see the spike: record the index
+                if pick_start is None:
+                    pick_start = i   # record detection index (sample index)
+                    # optionally, if you prefer timestamp corresponding to the center of the cropped window:
+                    # pick_start = i - 5
 
+                # waiting/debounce window: increment counter and advance time
+                if count < wait_for_pressure_sync:
+                    count += 1
+                    pick_type = 'Successful'  # optimistic until pressure spikes
+                    # print("waiting... (count = {})".format(count))
+                    i += 1   # IMPORTANT: advance time so pressure samples can change
+                    continue
+                else:
+                    # waiting finished with no pressure spike -> success at pick_start
+                    pick_type = 'Successful'
+                    print(f'Apple picked! dF/dt: {cropped_backward_diff}, Pressure: {avg_pressure}, detection_index: {pick_start}')
+                    return pick_type, pick_start
             elif avg_pressure >= pressure_threshold:
-                pick_type = f'Failed'
-                # print(f'Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(force)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}')
+                # failure: report failure at the index where pressure spike observed
+                pick_type = 'Failed'
+                print(f'Apple pick failed. Force: {filtered_force[0]}, dF/dt: {cropped_backward_diff}, Pressure: {avg_pressure}, index: {i}')
+                return pick_type, i
+
+        i += 1
+
+    # if loop finishes without classification:
+    return pick_type, pick_start if pick_start is not None else i
+
+def picking_type_classifier_force_only(force, force_threshold, force_change_threshold):
+
+    def moving_average(final_force):
+        window_size = 5
+        filtered = []
+        for i in range(len(final_force) - window_size + 1):
+            filtered.append(round(np.sum(final_force[i:i + window_size]) / window_size, 2))
+        return filtered
+
+    pick_type = 'Unclassified'
+    i = 10
+
+    while i < len(force) - 10:
+        cropped_force = force[i - 10:i]
+        filtered_force = moving_average(cropped_force)
+
+        # Compute numeric derivative using your backwards-difference approach
+        backwards_diff = []
+        h = 2
+        for j in range(2 * h, len(filtered_force)):
+            diff = ((3 * filtered_force[j]) -
+                    (4 * filtered_force[j - h]) +
+                    (filtered_force[j - 2*h])) / (2 * h)
+            backwards_diff.append(diff)
+
+        avg_force_derivative = np.average(backwards_diff)
+
+        # ---- Force-only logic ----
+        # 1) Force must be low at baseline
+        # 2) Force derivative spike → successful pick
+        if filtered_force[0] <= force_threshold:
+            if avg_force_derivative >= force_change_threshold:
+                pick_type = 'Successful'
+                print(f'Pick detected! dF/dt: {avg_force_derivative}')
                 break
 
-            elif float(cropped_backward_diff) < force_change_threshold and np.round(filtered_force[0]) >= force_threshold:
-                idx = idx + 1
-                i = i + 1
+        i += 1
 
-        else:
-            if idx == 0:
-                i = i + 1
-
-            else:
-                if float(cropped_backward_diff) < force_change_threshold and np.round(filtered_force[0]) < force_threshold:
-                    pick_type = f'Failed'
-                    # print(f'Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(force)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}')
-                    break
-
-                elif avg_pressure >= pressure_threshold and np.round(filtered_force[0]) < force_threshold:
-                    pick_type = f'Failed'
-                    # print(f'Apple was failed to be picked :( Force: {np.round(filtered_force[0])} Max Force: {np.max(force)}  Bdiff: {cropped_backward_diff}  Pressure: {avg_pressure}')
-                    break
+    # If never triggered
+    if pick_type == 'Unclassified':
+        print('Pick unclassified: no force spike detected.')
 
     return pick_type, i
-def process_file_and_graph_pick_analysis(filename, pressure_threshold, force_threshold, force_change_threshold):
-    flag = False  # reset every new pick analysis
 
+def picking_type_classifier_f_tof(force, tof, tof_threshold, force_threshold, force_change_threshold):
+    def moving_average(final_force):
+        window_size = 5
+        filtered = []
+        for k in range(len(final_force) - window_size + 1):
+            filtered.append(round(np.sum(final_force[k:k + window_size]) / window_size, 2))
+        return filtered
+
+    count = 0
+    wait_for_tof_sync = 10     # same sync delay as pressure version
+    pick_type = 'Unclassified'
+    i = 10
+    pick_start = None
+
+    while i < len(force) - 10 and i < len(tof) - 10:   # make sure arrays don't overrun
+        cropped_force = force[i - 10:i]
+        filtered_force = moving_average(cropped_force)
+        cropped_tof = tof[i - 10:i]
+        avg_tof = np.average(cropped_tof)
+
+        # backward (discrete) first derivative on filtered_force
+        backwards_diff = []
+        h = 2
+        for j in range(2 * h, len(filtered_force)):
+            diff = ((3 * filtered_force[j]) - (4 * filtered_force[j - h]) + filtered_force[j - 2*h]) / (2 * h)
+            backwards_diff.append(diff)
+        cropped_backward_diff = np.average(backwards_diff) if backwards_diff else 0.0
+
+        if count > 0 and count < wait_for_tof_sync:
+                    count += 1
+        # picking logic starts here
+        if filtered_force and filtered_force[0] <= force_threshold:
+            # object detaches → force decreases fast, TOF small = object moved away cleanly
+            if cropped_backward_diff >= force_change_threshold and avg_tof < tof_threshold:
+
+                if pick_start is None:
+                    pick_start = i  # record where pull-off detected
+
+                if count < wait_for_tof_sync:
+                    pick_type = 'Successful'   # assume Success unless TOF shows spike
+                    i += 1
+                    continue
+                else:
+                    print(f'Apple picked! dF/dt:{cropped_backward_diff}, TOF:{avg_tof}, detection_index:{pick_start}')
+                    return 'Successful', pick_start
+
+            # if TOF rises (or spikes) -> failed pick / stuck apple
+            elif avg_tof >= tof_threshold and count < wait_for_tof_sync:
+                print(f'Apple pick failed. Force:{filtered_force[0]}, dF/dt:{cropped_backward_diff}, TOF:{avg_tof}, index:{i}')
+                return 'Failed', i
+            elif count >= wait_for_tof_sync:
+                return 'Successful', pick_start
+
+        i += 1
+
+    return pick_type, pick_start if pick_start is not None else i
+
+def picking_type_classifier_force_flexnorm(
+        force,
+        flex_norm,
+        flex_fail_threshold,      # e.g. 10 using your rule
+        force_threshold,
+        force_change_threshold):
+
+    def moving_average(final_force):
+        window_size = 5
+        filtered = []
+        for k in range(len(final_force) - window_size + 1):
+            filtered.append(round(np.sum(final_force[k:k + window_size]) / window_size, 2))
+        return filtered
+
+    count = 0
+    wait_for_flex_sync = 10
+    pick_type = 'Unclassified'
+    i = 10
+    pick_start = None   # where spike first occurs
+
+    while i < len(force) - 10:
+
+        # 10-sample window
+        cropped_force = force[i - 10:i]
+        filtered_force = moving_average(cropped_force)
+
+        cropped_flex = flex_norm[i - 10:i]
+        avg_flex = np.average(cropped_flex)
+
+        # backward derivative of filtered force
+        backwards_diff = []
+        h = 2
+        for j in range(2 * h, len(filtered_force)):
+            diff = ((3 * filtered_force[j])
+                    - (4 * filtered_force[j - h])
+                    + filtered_force[j - 2 * h]) / (2 * h)
+            backwards_diff.append(diff)
+
+        cropped_backward_diff = np.average(backwards_diff) if backwards_diff else 0.0
+
+        if filtered_force and filtered_force[0] <= force_threshold:
+
+            # CASE 1 — upward force spike AND flex has not collapsed
+            if cropped_backward_diff >= force_change_threshold and avg_flex >= flex_fail_threshold:
+
+                if pick_start is None:
+                    pick_start = i
+
+                # wait period to see if flex collapses afterwards
+                if count < wait_for_flex_sync:
+                    count += 1
+                    pick_type = 'Successful'  # optimistic
+                    i += 1
+                    continue
+                else:
+                    # flex never collapsed → successful pick
+                    pick_type = 'Successful'
+                    print(f'Apple picked! dF/dt: {cropped_backward_diff}, FlexNorm: {avg_flex}, detection_index: {pick_start}')
+                    return pick_type, pick_start
+
+            # CASE 2 — flex norm dropped below threshold → FAILED PICK
+            elif avg_flex < flex_fail_threshold:
+                pick_type = 'Failed'
+                print(f'Apple pick failed. Force: {filtered_force[0]}, '
+                      f'dF/dt: {cropped_backward_diff}, FlexNorm: {avg_flex}, index: {i}')
+                return pick_type, i
+
+        i += 1
+
+    # no decision reached
+    return pick_type, (pick_start if pick_start is not None else i)
+
+# GENERIC PICK CLASSIFIER
+def picking_type_classifier_force_multi(
+        force,
+        sensors,                # dict: {"pressure": array, "tof": array, "flex": array}
+        thresholds,             # dict: {"pressure": X, "tof": Y, "flex": Z}
+        combination_logic,      # "OR", "AND", or custom lambda
+        force_threshold,
+        force_change_threshold):
+
+    def moving_average(final_force):
+        window_size = 5
+        return [
+            round(np.sum(final_force[k:k+window_size]) / window_size, 2)
+            for k in range(len(final_force) - window_size + 1)
+        ]
+
+    wait_sync = 10
+    count = 0
+    pick_type = "Unclassified"
+    pick_start = None
+    i = 10
+
+    # Ensure sensors have matching length
+    min_len = min([len(force)] + [len(v) for v in sensors.values()])
+    
+    while i < min_len - 10:
+
+        cropped_force = force[i - 10:i]
+        filtered_force = moving_average(cropped_force)
+
+        # Compute derivative --------------------------
+        backwards_diff = []
+        h = 2
+        for j in range(2*h, len(filtered_force)):
+            diff = ((3 * filtered_force[j])
+                    - (4 * filtered_force[j - h])
+                    + filtered_force[j - 2*h]) / (2 * h)
+            backwards_diff.append(diff)
+        dF = np.average(backwards_diff) if backwards_diff else 0.0
+
+        # Compute sensor averages ---------------------
+        avg_values = {}
+        for key, arr in sensors.items():
+            avg_values[key] = np.average(arr[i - 10:i])
+
+        # Decide failure based on OR / AND or custom logic
+        def failure_condition():
+            if combination_logic == "OR":
+                return any(avg_values[s] >= thresholds[s] for s in avg_values)
+            elif combination_logic == "AND":
+                return all(avg_values[s] >= thresholds[s] for s in avg_values)
+            else:
+                # custom boolean lambda(avg_values, thresholds)
+                return combination_logic(avg_values, thresholds)
+
+        # Detect event --------------------------------
+        if filtered_force and filtered_force[0] <= force_threshold:
+
+            # → Successful pick path
+            if dF >= force_change_threshold and not failure_condition():
+
+                if pick_start is None:
+                    pick_start = i
+
+                if count < wait_sync:
+                    count += 1
+                    pick_type = "Successful"
+                    i += 1
+                    continue
+                else:
+                    print(f"Apple picked! dF/dt:{dF}, sensors:{avg_values}, idx:{pick_start}")
+                    return "Successful", pick_start
+
+            # → Failed pick path
+            elif failure_condition():
+                # print(f"FAILED pick. dF/dt:{dF}, sensors:{avg_values}, idx:{i}")
+                return "Failed", i
+
+        i += 1
+
+    return pick_type, pick_start if pick_start is not None else i
+
+def picking_type_classifier_f_pressure_or_tof(force, pressure, tof,
+                                              pressure_th, tof_th,
+                                              force_th, force_change_th):
+    sensors = {"pressure": pressure, "tof": tof}
+    thresholds = {"pressure": pressure_th, "tof": tof_th}
+    return picking_type_classifier_force_multi(
+        force, sensors, thresholds, combination_logic="OR",
+        force_threshold=force_th,
+        force_change_threshold=force_change_th
+    )
+
+def picking_type_classifier_f_pressure_or_flex(force, pressure, flex,
+                                               pressure_th, flex_th,
+                                               force_th, force_change_th):
+    sensors = {"pressure": pressure, "flex": -flex}
+    thresholds = {"pressure": pressure_th, "flex": -flex_th}
+    return picking_type_classifier_force_multi(
+        force, sensors, thresholds, combination_logic="OR",
+        force_threshold=force_th,
+        force_change_threshold=force_change_th
+    )
+
+def picking_type_classifier_f_tof_or_flex(force, tof, flex,
+                                          tof_th, flex_th,
+                                          force_th, force_change_th):
+    sensors = {"tof": tof, "flex": -flex}
+    thresholds = {"tof": tof_th, "flex": -flex_th}
+    return picking_type_classifier_force_multi(
+        force, sensors, thresholds, combination_logic="OR",
+        force_threshold=force_th,
+        force_change_threshold=force_change_th
+    )
+
+def picking_type_classifier_f_any(force, pressure, tof, flex,
+                                  pressure_th, tof_th, flex_th,
+                                  force_th, force_change_th):
+    sensors = {"pressure": pressure, "tof": tof, "flex": -flex}
+    thresholds = {"pressure": pressure_th, "tof": tof_th, "flex": -flex_th}
+    return picking_type_classifier_force_multi(
+        force, sensors, thresholds, combination_logic="OR",
+        force_threshold=force_th,
+        force_change_threshold=force_change_th
+    )
+
+
+
+
+
+def process_file_and_graph_pick_analysis(filename, pressure_threshold, force_threshold, force_change_threshold, tof_threshold, flex_threshold):
     raw_f_arr, f_arr, etime_force = return_force_array(filename)
     p_arr, etimes_pressure = return_pressure_array(filename)
-    total_disp, etime_joint = return_displacement_array(filename)
-
-    # downsample to get same number of data points
+    tof_arr, etimes_tof = return_tof_array(filename)
+    tof_arr_new = scipy.signal.resample(tof_arr, len(f_arr))
+    flex_arr, etimes_flex = return_flex_array(filename)
+    flex_arr_new = scipy.signal.resample(flex_arr, len(f_arr))
     p_arr_new = scipy.signal.resample(p_arr, len(f_arr))
+    filtered_force = filter_force([f_arr], 21)[0]
 
-    # uncomment to view full plots of data over time
-    # fig, ax = plt.subplots(3, 1, figsize=(10, 30))
-    # ax[0].plot(etime_force, raw_f_arr[:, 0], label='Force X')
-    # ax[0].plot(etime_force, raw_f_arr[:, 1], label='Force Y')
-    # ax[0].plot(etime_force, raw_f_arr[:, 2], label='Force Z')
-    # ax[0].set_title(f'Raw(Force): /ft300_wrench\n/wrench/force/x, y, and z')
-    # ax[0].set_xlabel('Time (s)')
-    # ax[0].set_ylabel('Raw(Force) (N)')
-    # ax[0].legend()
-    #
-    # ax[1].plot(etime_force, p_arr_new)  # etime = 42550	central_diff = 42450
-    # ax[1].set_title(f'Pressure: /io_and_status_controller/io_states\n/analog_in_states[]/analog_in_states[1]/state')
-    # ax[1].set_xlabel('Time (s)')
-    # ax[1].set_ylabel('Pressure')
-    #
-    # ax[2].plot(etime_joint, total_disp)  # etime = 42550	central_diff = 42450
-    # ax[2].set_title(f'Norm(Tool Pose): /tool_pose\n/transform/translation/x and y')
-    # ax[2].set_xlabel('Time (s)')
-    # ax[2].set_ylabel('Tool Pose')
-    #
-    # plt.subplots_adjust(top=0.9, hspace=0.29)
-    # fig.suptitle(
-    #     f'file: {filename}')
-    #
-    # plt.show()
 
-    f_arr_col = f_arr[..., None]
-    total_disp_col = np.array(total_disp)[..., None]
-    p_arr_col = p_arr_new
+    # Find start index where pressure first <= -56
+    start_index_candidates = np.where(p_arr_new <= -56)[0]
+    if len(start_index_candidates) == 0:
+        print("Pressure never reaches -56, starting from the beginning.")
+        start_index = 0
+    else:
+        start_index = start_index_candidates[0]+INDEX_OG
 
-    final_force, delta_x, general_time = match_times(etime_force, etime_joint, f_arr_col, total_disp_col)
-    final_pressure, p_dis, other_time = match_times(etime_force, etime_joint, p_arr_col, total_disp_col)
-
-    fp = final_pressure.tolist()
-
-    filtered = filter_force(final_force, 21)
-    fp_new = scipy.signal.resample(fp, len(filtered)) # downsample to get right length array for indexing
-
-    # Central Difference
+    # Central difference for derivative
     backwards_diff = []
     h = 2
-    for j in range(2 * h, (len(filtered))):
-        diff = ((3 * filtered[j]) - (4 * filtered[j - h]) + filtered[j - (2 * h)]) / (2 * h)
+    for j in range(2*h, len(filtered_force)):
+        diff = ((3*filtered_force[j]) - (4*filtered_force[j-h]) + filtered_force[j-2*h]) / (2*h)
         backwards_diff.append(diff)
-        j += 1
+    low_bdiff = butter_lowpass_filter(backwards_diff)
 
-    # Filter requirements.
-    fs = 500.0  # sample rate, Hz
-    cutoff = 50  # desired cutoff frequency of the filter, Hz
-    order = 2  # sin wave can be approx represented as quadratic
+    # Pass the start_index to the classifier
+    # pick_type, pick_i = picking_type_classifier_f_p(filtered_force[start_index:], p_arr_new[start_index:], 
+                                                # pressure_threshold, force_threshold, force_change_threshold)
+    # pick_type, pick_i = picking_type_classifier_force_only(filtered_force[start_index:], force_threshold, force_change_threshold)
+    # pick_type, pick_i = picking_type_classifier_f_tof(filtered_force[start_index:-10], tof_arr_new[start_index:-10], pressure_threshold, force_threshold, force_change_threshold)
+    # pick_type, pick_i = picking_type_classifier_force_flexnorm(filtered_force[start_index:-10], flex_arr_new[start_index:-10], pressure_threshold, force_threshold, force_change_threshold)
+    
+    # # calling force + (pressure or ToF)
+    # pick_type, pick_i = picking_type_classifier_f_pressure_or_tof(
+    #     filtered_force[start_index:-10],      # force
+    #     p_arr_new[start_index:-10],           # pressure
+    #     tof_arr_new[start_index:-10],         # tof
+    #     pressure_threshold,                # pressure_th
+    #     tof_threshold,                     # tof_th
+    #     force_threshold,                   # force_th
+    #     force_change_threshold             # force_change_th
+    # )
 
-    low_bdiff = butter_lowpass_filter(backwards_diff, cutoff, fs, order)
-    low_delta_x = scipy.signal.savgol_filter(delta_x[:, 0], 300, 2)
+    # # calling force + (pressure or flex)
+    # pick_type, pick_i = picking_type_classifier_f_pressure_or_flex(
+    #     filtered_force[start_index:-10],      # force
+    #     p_arr_new[start_index:-10],           # pressure
+    #     flex_arr_new[start_index:-10],         # flex
+    #     pressure_threshold,                # pressure_th
+    #     flex_threshold,                     # flex_th
+    #     force_threshold,                   # force_th
+    #     force_change_threshold             # force_change_th
+    # )
 
-    # selecting the correct data to use
-    kn1 = KneeLocator(general_time, low_delta_x, curve='convex', direction='decreasing')
-    idx2 = kn1.minima_indices[0]
-    idx2 = np.where(low_delta_x == np.max(low_delta_x[idx2:-1]))[0][0]
-    turn = np.where(low_delta_x == np.min(low_delta_x[idx2:-1]))[0]
-    # uncomment to see index check plot
-    # plt.plot(general_time, low_delta_x)
-    # plt.plot(general_time[idx2 + INDEX_OG], low_delta_x[idx2 + INDEX_OG], "x")  # ax[2]
-    # plt.plot(general_time[turn[0]], low_delta_x[turn[0]], "x")
-    # plt.show()
-    cropped_f = filtered[idx2 + INDEX_OG:turn[0]]
-    cropped_p = fp_new[idx2 + INDEX_OG: turn[0]]
-    cropped_time = general_time[idx2 + INDEX_OG: turn[0]]
-    cropped_low_bdiff = low_bdiff.tolist()[idx2 + INDEX_OG: turn[0]]
+    # # calling force + (tof or flex)
+    # pick_type, pick_i = picking_type_classifier_f_tof_or_flex(
+    #     filtered_force[start_index:-10],      # force
+    #     tof_arr_new[start_index:-10],           # tof
+    #     flex_arr_new[start_index:-10],         # flex
+    #     tof_threshold,                # tof_th
+    #     flex_threshold,                     # flex_th
+    #     force_threshold,                   # force_th
+    #     force_change_threshold             # force_change_th
+    # )
 
-    # Moving average of dF/dt for plotting
-    cropped_low_bdiff = np.asarray(cropped_low_bdiff).flatten()
-    window_size = 5  # Choose an odd number, e.g., 5
-    window = np.ones(window_size) / window_size
-    moving_avg = np.convolve(cropped_low_bdiff, window, mode='same')
-    # print(f"len(cropped_time): {len(cropped_time)}")
-    # print(f"len(cropped_low_bdiff): {len(cropped_low_bdiff)}")
-    # print(f"len(moving_avg): {len(moving_avg)}")
-    pick_type, pick_i = picking_type_classifier(cropped_f, cropped_p, pressure_threshold, force_threshold, force_change_threshold)
+    # calling force + (pressure or tof or flex)
+    pick_type, pick_i = picking_type_classifier_f_any(
+        filtered_force[start_index:-10],      # force
+        p_arr_new[start_index: -10],            # pressure
+        tof_arr_new[start_index:-10],           # tof
+        flex_arr_new[start_index:-10],         # flex
+        pressure_threshold,             # pressure_th
+        tof_threshold,                # tof_th
+        flex_threshold,                     # flex_th
+        force_threshold,                   # force_th
+        force_change_threshold             # force_change_th
+    )
 
-    # # uncomment for ORIGINAL PLOTS
-    # # plot of cropped force, cropped dF/dt, cropped pressure, and displacement
-    # fig, ax = plt.subplots(3, 1, figsize=(10, 30))
-    # # Increase the font size for the tick labels on both axes
-    # ax[0].tick_params(axis='x', labelsize=17)  # For x-axis of the first subplot
-    # ax[0].tick_params(axis='y', labelsize=17)  # For y-axis of the first subplot
-    #
-    # ax[1].tick_params(axis='x', labelsize=17)  # For x-axis of the second subplot
-    # ax[1].tick_params(axis='y', labelsize=17)  # For y-axis of the second subplot
-    # # ax[0].plot(general_time, low_delta_x)  # etime = 42550	central_diff = 42450
-    # # ax[0].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
-    # ax[2].fill_between(general_time, low_delta_x, 0,
-    #                    where=(general_time >= cropped_time[0]) & (general_time <= cropped_time[-1]),
-    #                    color='red', alpha=0.1)
-    # # ax[0].set_title(f'FILTERED Norm(Tool Pose): /tool_pose\n/transform/translation/x and y')
-    # # ax[0].set_xlabel('Time (s)')
-    # # ax[0].set_ylabel('Tool Pose')
-    #
-    # # ax[0].plot(general_time, final_force, color='black')
-    # ax[0].plot(etime_force, raw_f_arr[:, 0], label='Force X')
-    # ax[0].plot(etime_force, raw_f_arr[:, 1], label='Force Y')
-    # ax[0].plot(etime_force, raw_f_arr[:, 2], label='Force Z')
-    # ax[0].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
-    # ax[0].set_title(f'Z-Force (N)', fontsize=20)
-    # ax[0].set_xlabel('Time (s)', fontsize=20)
-    # ax[0].set_ylabel('Wrist ||F||', fontsize=20)
-    # ax[0].legend()
-    #
-    #
-    # # ax[2].plot(cropped_time[:(len(moving_avg))], moving_avg)
-    # # ax[2].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
-    # # ax[2].set_title(f'MOVING AVERAGE CROPPED Norm(Force): /ft300_wrench\n/wrench/force/x, y, and z')
-    # # ax[2].set_xlabel('Time (s)')
-    # # ax[2].set_ylabel('Norm(Force) (N)')
-    #
-    # ax[1].plot(general_time, final_pressure, color='black')
-    # ax[1].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
-    # ax[1].set_title('Gripper pressure', fontsize=20)
-    # ax[1].set_xlabel('Time (s)', fontsize=20)
-    # ax[1].set_ylabel('Pressure (mbar)', fontsize=20)
-    #
-    # ax[2].plot(general_time, low_delta_x, color='black')
-    # ax[2].axvline(cropped_time[pick_i], color='r', linestyle='dotted')
-    # ax[2].set_title('position', fontsize=20)
-    # ax[2].set_xlabel('Time (s)', fontsize=20)
-    # ax[2].set_ylabel('position', fontsize=20)
-    #
-    #
-    # # Adjust spacing
-    # plt.subplots_adjust(top=0.88, hspace=0.5)
-    #
-    # # Add a figure title with adjusted position
-    # if pick_type == 'Unclassified':
-    #     fig.suptitle(
-    #         f'{filename}\nUnable to Classify Pick\n(Actual Classification: Successful)',
-    #         y=0.95,
-    #         fontsize=20
-    #     )
-    #     print(
-    #         f'{filename}\n\tUnable to Classify Pick\n(Actual Classification: Successful)')
-    # else:
-    #     fig.suptitle(
-    #         f'{filename}\nPick Classification: {pick_type} Pick at Time {np.round(np.round(cropped_time[pick_i], 2), 2)} Seconds \n(Actual Classification: Successful)',
-    #         y=0.95,
-    #         fontsize=20
-    #     )
-    #     print(f'{filename}\n\tPick Classification: {pick_type} Pick at Time {np.round(np.round(cropped_time[pick_i], 2), 2)} \nSeconds (Actual Classification: Successful)')
+    # TODO: call random forest classifier here
 
-    # # NEW PLOTS FOR PAPER
-    # fig, ax = plt.subplots(1, 3, figsize=(40, 10))
-    #
-    # # Increase the font size for the tick labels on both axes
-    # ax[0].tick_params(axis='x', labelsize=30)  # For x-axis of the first subplot
-    # ax[0].tick_params(axis='y', labelsize=30)  # For y-axis of the first subplot
-    #
-    # ax[1].tick_params(axis='x', labelsize=30)  # For x-axis of the second subplot
-    # ax[1].tick_params(axis='y', labelsize=30)  # For y-axis of the second subplot
-    #
-    # ax[2].tick_params(axis='x', labelsize=30)  # For x-axis of the third subplot
-    # ax[2].tick_params(axis='y', labelsize=30)  # For y-axis of the third subplot
-    #
-    # ax[0].plot(general_time, low_delta_x, color='black')  # etime = 42550	central_diff = 42450
-    # ax[0].set_ylim(0.38, 0.6)
-    # ax[0].set_xlim(10,70)
-    # ax[1].set_xlim(10, 70)
-    # ax[2].set_xlim(10, 70)
-    #
-    # ax[0].axvline(cropped_time[pick_i], color='r', linestyle='dashed')
-    # # ax[0].fill_between(general_time, low_delta_x, 0,
-    # #                    where=(general_time >= cropped_time[0]) & (general_time <= cropped_time[-1]),
-    # #                    color='red', alpha=0.1)
-    # general_time = np.array(general_time)
-    # ax[0].fill_between(general_time, 0, low_delta_x, where=((general_time >= 15.5) & (general_time <= 23.5)), color='#377eb8',
-    #                    alpha=0.3)
-    # ax[0].fill_between(general_time, 0, low_delta_x, where=((general_time >= 23.5) & (general_time <= 33)),
-    #                    color='#ff7f00',
-    #                    alpha=0.3)
-    # ax[0].fill_between(general_time, 0, low_delta_x, where=((general_time >= 35.5) & (general_time <= 42.5)),
-    #                    color='#4daf4a',
-    #                    alpha=0.3)
-    # ax[0].fill_between(general_time, 0, low_delta_x, where=((general_time >= 42.5) & (general_time <= 44.31)),
-    #                    color='#f781bf',
-    #                    alpha=0.3)
-    # ax[0].fill_between(general_time, 0, low_delta_x, where=((general_time >= 57) & (general_time <= 63)),
-    #                    color='#984ea3',
-    #                    alpha=0.3)
-    # ax[0].set_title(f'Gripper x-y coordinates', fontsize=35)
-    # ax[0].set_xlabel('Time (s)', fontsize=35)
-    # ax[0].set_ylabel('Position (m)', fontsize=35)
-    #
-    # ax[1].plot(general_time, final_force, color='black')
-    # final_force = np.array(final_force).flatten()
-    # ax[1].axvline(cropped_time[pick_i], color='r', linestyle='dashed')
-    # ax[1].fill_between(general_time, -1, final_force, where=((general_time >= 15.5) & (general_time <= 23.5)),
-    #                    color='#377eb8',
-    #                    alpha=0.3)
-    # ax[1].fill_between(general_time, -1, final_force, where=((general_time >= 23.5) & (general_time <= 33)),
-    #                    color='#ff7f00',
-    #                    alpha=0.3)
-    # ax[1].fill_between(general_time, -1, final_force, where=((general_time >= 35.5) & (general_time <= 42.5)),
-    #                    color='#4daf4a',
-    #                    alpha=0.3)
-    # ax[1].fill_between(general_time, -1, final_force, where=((general_time >= 42.5) & (general_time <= 44.31)),
-    #                    color='#f781bf',
-    #                    alpha=0.3)
-    # ax[1].fill_between(general_time, -1, final_force, where=((general_time >= 57) & (general_time <= 63)),
-    #                    color='#984ea3',
-    #                    alpha=0.3)
-    # ax[1].set_title(f'Wrist ||F||', fontsize=35)
-    # ax[1].set_xlabel('Time (s)', fontsize=35)
-    # ax[1].set_ylabel('Force (N)', fontsize=35)
-    #
-    # ax[2].plot(general_time, final_pressure, color='black')  # etime = 42550	central_diff = 42450
-    # final_pressure = np.array(final_pressure).flatten()
-    # ax[2].axvline(cropped_time[pick_i], color='r', linestyle='dashed')
-    # ax[2].fill_between(general_time, -1, final_pressure, where=((general_time >= 15.5) & (general_time <= 23.5)),
-    #                    color='#377eb8',
-    #                    alpha=0.3)
-    # ax[2].fill_between(general_time, -1, final_pressure, where=((general_time >= 23.5) & (general_time <= 33)),
-    #                    color='#ff7f00',
-    #                    alpha=0.3)
-    # ax[2].fill_between(general_time, -1, final_pressure, where=((general_time >= 35.5) & (general_time <= 42.5)),
-    #                    color='#4daf4a',
-    #                    alpha=0.3)
-    # ax[2].fill_between(general_time, -1, final_pressure, where=((general_time >= 42.5) & (general_time <= 44.31)),
-    #                    color='#f781bf',
-    #                    alpha=0.3)
-    # ax[2].fill_between(general_time, -1, final_pressure, where=((general_time >= 57) & (general_time <= 63)),
-    #                    color='#984ea3',
-    #                    alpha=0.3)
-    # ax[2].set_title(f'Gripper pressure', fontsize=35)
-    # ax[2].set_xlabel('Time (s)', fontsize=35)
-    # ax[2].set_ylabel('Pressure (mbar)', fontsize=35)
-    #
-    # # Adjust spacing
-    # plt.subplots_adjust(top=0.83, hspace=0.5)
 
-    # # Uncomment for 2nd full page figure
-    # fig, ax = plt.subplots(1, 3, figsize=(50, 10))
-    #
-    # # Increase the font size for the tick labels on both axes
-    # ax[0].set_xlim(38, 63)
-    # ax[1].set_xlim(38, 63)
-    # ax[2].set_xlim(38, 63)
-    # ax[0].tick_params(axis='x', labelsize=30)  # For x-axis of the first subplot
-    # ax[0].tick_params(axis='y', labelsize=30)  # For y-axis of the first subplot
-    #
-    # ax[1].tick_params(axis='x', labelsize=30)  # For x-axis of the second subplot
-    # ax[1].tick_params(axis='y', labelsize=30)  # For y-axis of the second subplot
-    #
-    # ax[2].tick_params(axis='x', labelsize=30)  # For x-axis of the third subplot
-    # ax[2].tick_params(axis='y', labelsize=30)  # For y-axis of the third subplot
-    #
-    # ax[0].plot(general_time, final_force, color='black')
-    # final_force = np.array(final_force).flatten()
-    # ax[0].axvline(cropped_time[pick_i], color='r', linestyle='dashed', linewidth=2)
-    # ax[0].set_title(f'Wrist ||F||', fontsize=35)
-    # ax[0].set_xlabel('Time (s)', fontsize=35)
-    # ax[0].set_ylabel('Force (N)', fontsize=35)
-    #
-    # ax[1].plot(cropped_time[:(len(moving_avg))], moving_avg, color='black')
-    # # ax[1].set_ylim(0.38, 0.6)
-    # ax[1].axvline(cropped_time[pick_i], color='r', linestyle='dashed', linewidth=2)
-    # ax[1].axhline(1, color='b', linestyle='dashed', linewidth=2)
-    # ax[1].set_title(f'Moving average of dF(t))', fontsize=35)
-    # ax[1].set_xlabel('Time (s)', fontsize=35)
-    # ax[1].set_ylabel('Force (Ns)', fontsize=35)
-    #
-    # ax[2].plot(general_time, final_pressure, color='black')  # etime = 42550	central_diff = 42450
-    # final_pressure = np.array(final_pressure).flatten()
-    # ax[2].axvline(cropped_time[pick_i], color='r', linestyle='dashed', linewidth=2)
-    # ax[2].axhline(699, color='b', linestyle='dashed', linewidth=2)
-    # ax[2].set_title(f'Gripper pressure', fontsize=35)
-    # ax[2].set_xlabel('Time (s)', fontsize=35)
-    # ax[2].set_ylabel('Pressure (mbar)', fontsize=35)
-    #
-    # # Adjust spacing
-    # plt.subplots_adjust(top=0.83, hspace=0.5)
+    # Adjust pick_i to match the full array indexing
+    pick_i += start_index
+
+    # Convert pick index to time
+    pick_time = etime_force[pick_i]
+
+    # Plot results
+    fig, ax = plt.subplots(4, 1, figsize=(12, 12))
+    
+    ax[0].plot(etime_force[:len(low_bdiff)], low_bdiff, label='Filtered dF/dt', color='black')
+    ax[0].axhline(force_change_threshold, color='blue', linestyle='--', label='Force Change Threshold')
+    ax[0].axvline(pick_time, color='red', linestyle='--', label=f'Pick Event ({pick_time:.2f}s)')
+    ax[0].axvspan(etime_force[start_index], etime_force[-1], color='yellow', alpha=0.2, label='Analysis Region')
+    ax[0].set_title("Force Derivative")
+    ax[0].set_xlabel("Time (s)")
+    ax[0].set_ylabel("dF/dt")
+    ax[0].legend(loc='upper left')
+    
+    ax[1].plot(etime_force, p_arr_new, label='Pressure', color='red')
+    ax[1].axhline(pressure_threshold, color='blue', linestyle='--', label='Pressure Threshold')
+    ax[1].axvline(pick_time, color='red', linestyle='--', label=f'Pick Event ({pick_time:.2f}s)')
+    ax[1].axvspan(etime_force[start_index], etime_force[-1], color='yellow', alpha=0.2, label='Analysis Region')
+    ax[1].set_title("Gripper Pressure")
+    ax[1].set_xlabel("Time (s)")
+    ax[1].set_ylabel("Pressure")
+    ax[1].legend(loc='upper left')
+
+    ax[3].plot(etime_force, tof_arr_new, label='ToF', color='red')
+    ax[3].axhline(tof_threshold, color='blue', linestyle='--', label='Pressure Threshold')
+    ax[3].axvline(pick_time, color='red', linestyle='--', label=f'Pick Event ({pick_time:.2f}s)')
+    ax[3].axvspan(etime_force[start_index], etime_force[-1], color='yellow', alpha=0.2, label='Analysis Region')
+    ax[3].set_title("Gripper Distance to Apple (ToF)")
+    ax[3].set_xlabel("Time (s)")
+    ax[3].set_ylabel("Time of Flight Measurement (mm)")
+    ax[3].legend(loc='upper left')
+
+    ax[2].plot(etime_force, flex_arr_new, label='Flex', color='red')
+    ax[2].axhline(flex_threshold, color='blue', linestyle='--', label='Normed Flex Threshold')
+    ax[2].axvline(pick_time, color='red', linestyle='--', label=f'Pick Event ({pick_time:.2f}s)')
+    ax[2].axvspan(etime_force[start_index], etime_force[-1], color='yellow', alpha=0.2, label='Analysis Region')
+    ax[2].set_title("Normalized Flex Sensor Reading (degrees)")
+    ax[2].set_xlabel("Time (s)")
+    ax[2].set_ylabel("Normed Flex Measurement (degrees)")
+    ax[2].legend(loc='upper left')
+    
+    # plt.suptitle(f"Bag: {filename}\nPick Classification: {pick_type}\n(Actual Classification: Failed) ", fontsize=16)
+    plt.suptitle(f"Bag: {filename}\nPick Classification: {pick_type}\n(Actual Classification: Successful) ", fontsize=16)
+    plt.tight_layout(rect=[0, 0, 0.95, 0.95])
+    plt.show()
+
+    print(f"\nBag: {filename}\nPick Classification: {pick_type}\n(Actual Classification: Successful) ")
+    # print(f"\nBag: {filename}\nPick Classification: {pick_type}\n(Actual Classification: Failed) ")
