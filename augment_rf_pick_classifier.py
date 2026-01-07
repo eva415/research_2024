@@ -14,10 +14,10 @@ STEP_SIZE = 10
 WINDOW_SIZE = 50
 
 # ----- Label definitions -----
-STATE_IDLE        = 0  # no pick yet
-STATE_SUCCESS     = 1  # successful pick
-STATE_FAIL        = 2  # failed pick (slip/drop)
-STATE_PRE_FAIL    = 3  # pre-failed pick (early warning)
+STATE_PICKING     = 0  # normal picking / no failure developing
+STATE_SUCCESS  = 1  # terminal success
+STATE_PRE_FAIL = 3  # failure already developing
+STATE_FAIL     = 2  # terminal failure
 
 
 def augment_paper(arr, pct_max=0.05, rng=None):
@@ -148,8 +148,14 @@ def process_csv_files(filename, augment=False, augment_pct=0.05, rng=None):
         flex_arr_new    = augment_paper(flex_arr_new,    pct_max=augment_pct, rng=rng_local)
 
     # Choose which features to use
-    features = filtered_force.reshape(-1, 1)  # just force REPLACE HERE
+    # features = filtered_force.reshape(-1, 1)  # just force REPLACE HERE
+    # features = np.column_stack((flex_arr_new, tof_arr_new, filtered_force)) # f t f
     # features = np.column_stack((flex_arr_new, p_arr_new, filtered_force, tof_arr_new))
+    # features = np.column_stack((tof_arr_new, p_arr_new, filtered_force)) # fpt
+    # features = np.column_stack((flex_arr_new, p_arr_new, filtered_force)) #fpf
+    # features = np.column_stack((tof_arr_new, filtered_force)) # f t
+    # features = np.column_stack((p_arr_new, filtered_force)) # f p
+    features = np.column_stack((flex_arr_new, filtered_force)) # f f
 
     return features, labels
 
@@ -252,13 +258,13 @@ def plot_bag_file(filename, split="UNKNOWN", clf=None, window_size=WINDOW_SIZE, 
             # np.column_stack((flex_arr_new, p_arr_new, filtered_force)), #fpf
             # np.column_stack((tof_arr_new, filtered_force)),  # f t
             # np.column_stack((p_arr_new, filtered_force)), # f p
-            # np.column_stack((flex_arr_new, filtered_force)), # f f
-            filtered_force.reshape(-1, 1), # just force
+            np.column_stack((flex_arr_new, filtered_force)), # f f
+            # filtered_force.reshape(-1, 1), # just force
             labels, window_size, step
         )
         y_pred = clf.predict(X_windowed)
 
-        pred_full = np.zeros_like(labels, dtype=int)
+        pred_full = np.full_like(labels, y_pred[0], dtype=int)
         for w, start in enumerate(range(0, len(labels)-window_size+1, step)):
             end = start + window_size
             pred_full[start:end] = y_pred[w]
@@ -272,18 +278,37 @@ def plot_bag_file(filename, split="UNKNOWN", clf=None, window_size=WINDOW_SIZE, 
             window_ranges.append((start, end, correct))
 
         # ---- Find first predicted pick ----
+        first_pick_idx = None
+        first_pick_val = None
+
         for i in range(1, len(pred_full)):
-            if pred_full[i-1] == 0 and pred_full[i] in [1,2]:
+            # Success: 0 → 1
+            if pred_full[i-1] == STATE_PICKING and pred_full[i] == STATE_SUCCESS:
                 first_pick_idx = i
-                first_pick_val = pred_full[i]
+                first_pick_val = STATE_SUCCESS
+                break
+
+            # Failure: 3 → 2
+            if pred_full[i-1] == STATE_PRE_FAIL and pred_full[i] == STATE_FAIL:
+                first_pick_idx = i
+                first_pick_val = STATE_FAIL
                 break
 
     # ---- Ground truth pick time ----
-    true_pick_idx, true_pick_val = None, None
+    true_pick_idx = None
+    true_pick_val = None
+
     for i in range(1, len(labels)):
-        if labels[i-1] == 0 and labels[i] in [1,2]:
+        # True success
+        if labels[i-1] == STATE_PICKING and labels[i] == STATE_SUCCESS:
             true_pick_idx = i
-            true_pick_val = labels[i]
+            true_pick_val = STATE_SUCCESS
+            break
+
+        # True failure
+        if labels[i-1] == STATE_PRE_FAIL and labels[i] == STATE_FAIL:
+            true_pick_idx = i
+            true_pick_val = STATE_FAIL
             break
 
     # ---- Plot signals ----
@@ -312,7 +337,10 @@ def plot_bag_file(filename, split="UNKNOWN", clf=None, window_size=WINDOW_SIZE, 
         legend_handles.append(line)
 
     if first_pick_idx is not None:
-        color = 'green' if first_pick_val == 1 else 'red'
+        if first_pick_val == STATE_SUCCESS:
+            color = 'green'
+        elif first_pick_val == STATE_FAIL:
+            color = 'red'
         predicted_pick_time = etime_force[first_pick_idx]
         for ax in axs:
             line = ax.axvline(predicted_pick_time, color=color, linestyle=':', linewidth=2)
@@ -326,11 +354,18 @@ def plot_bag_file(filename, split="UNKNOWN", clf=None, window_size=WINDOW_SIZE, 
     axs[3].set_xlabel("Time (s)")
 
     # ---- Title ----
-    suptitle_str = f"{os.path.basename(filename)}   [{split}]\nTrue label: {'Success' if int(labels[-1])==1 else 'Fail'}"
+    if labels[-1] == STATE_SUCCESS:
+        true_label_str = "Success"
+    elif labels[-1] == STATE_FAIL:
+        true_label_str = "Fail"
+    else:
+        true_label_str = "Non-terminal"
+
+    suptitle_str = f"{os.path.basename(filename)}   [{split}]\nTrue label: {true_label_str}"
     if true_pick_idx is not None:
         suptitle_str += f" | True pick time: {etime_force[true_pick_idx]:.2f}s"
     if first_pick_idx is not None:
-        suptitle_str += f"\nRF label: {'Success' if int(first_pick_val)==1 else 'Fail'} | RF pick time: {predicted_pick_time:.2f}s"
+        suptitle_str += f"\nRF label: {true_label_str} | RF pick time: {predicted_pick_time:.2f}s"
     else:
         suptitle_str += "\nRF label: Unclassified | RF pick time: NONE"
     fig.suptitle(suptitle_str, fontsize=14)
@@ -421,14 +456,15 @@ if __name__ == "__main__":
 
     ax.set_xticks(np.arange(cm.shape[1]))
     ax.set_yticks(np.arange(cm.shape[0]))
-    ax.set_xticklabels([0,1,2])
-    ax.set_yticklabels([0,1,2])
+    label_names = ["Picking", "Success", "Fail", "Pre-Fail"]
+    ax.set_xticklabels(label_names)
+    ax.set_yticklabels(label_names)
 
     plt.tight_layout()
     plt.show()
 
     # Generate PDF plots
-    pdf_name = "AUG_RF_f_10.pdf" # REPLACE HERE
+    pdf_name = "AUG_RF_ff_10.pdf" # REPLACE HERE
     with PdfPages(pdf_name) as pdf:
         for prefix, _, _, split in test_bags:
             plot_bag_file(prefix, split=split, clf=clf,

@@ -12,196 +12,196 @@ from scipy.ndimage import median_filter
 
 INDEX_OG = 0  # set to 100 generally, 0 for exception cases
 
-failed_bag_files = ["final_approach_and_pick_20251029_172728",
-                    "final_approach_and_pick_20251029_172946",
-                    "final_approach_and_pick_20251029_173938",
-                    "final_approach_and_pick_20251029_174404",
-                    "final_approach_and_pick_20251029_180739",
-                    "final_approach_and_pick_20251030_114539",
-                    "final_approach_and_pick_20251030_114927",
-                    "final_approach_and_pick_20251030_130515",
-                    "final_approach_and_pick_20251030_132429",
-                    "final_approach_and_pick_20251029_165052",
-                    "final_approach_and_pick_20251030_150419"]
+# failed_bag_files = ["final_approach_and_pick_20251029_165052",
+#     "final_approach_and_pick_20251029_172728",
+#     "final_approach_and_pick_20251029_172946",
+#     "final_approach_and_pick_20251029_173938",
+#     "final_approach_and_pick_20251029_174404",
+#     "final_approach_and_pick_20251029_180739",
+#     "final_approach_and_pick_20251030_114539",
+#     "final_approach_and_pick_20251030_114927",
+#     "final_approach_and_pick_20251030_130515",
+#     "final_approach_and_pick_20251030_132429",
+#     "final_approach_and_pick_20251030_150419"]
 
-failed_corresponding_slip_times = [18.51,
-                                    12.74,
-                                    15.33,
-                                    4.08,
-                                    3.82,
-                                    12.20,
-                                    14.80,
-                                    9.64,
-                                    12.43,
-                                    5.4,
-                                    3.67]
+# failed_corresponding_slip_times = [3.8875,
+#     19.2875,
+#     13.465,
+#     16.465,
+#     66.76,
+#     4.265,
+#     13.1275,
+#     15.3275,
+#     10.7525,
+#     12.785,
+#     4.165]
 
-# successful_bag_files = ["final_approach_and_pick_20251028_143901",
-# "final_approach_and_pick_20251028_171000",
-# "final_approach_and_pick_20251028_171431",
-# "final_approach_and_pick_20251029_164443",
-# "final_approach_and_pick_20251029_164729",
-# "final_approach_and_pick_20251029_165334",
-# "final_approach_and_pick_20251029_170049",
-# "final_approach_and_pick_20251029_170153",
-# "final_approach_and_pick_20251029_170659",
-# "final_approach_and_pick_20251029_170813",
-# "final_approach_and_pick_20251029_171431",
-# "final_approach_and_pick_20251029_171756",
-# "final_approach_and_pick_20251029_171959",
-# "final_approach_and_pick_20251029_172251",
-# "final_approach_and_pick_20251029_172622",
-# "final_approach_and_pick_20251029_173433",
-# "final_approach_and_pick_20251029_173557",
-# "final_approach_and_pick_20251029_173742",
-# "final_approach_and_pick_20251029_174813",
-# "final_approach_and_pick_20251029_174943",
-# "final_approach_and_pick_20251029_175156",
-# "final_approach_and_pick_20251029_175542",
-# "final_approach_and_pick_20251029_175730",
-# "final_approach_and_pick_20251029_180355",
-# "final_approach_and_pick_20251029_180549",
-# "final_approach_and_pick_20251030_115312",
-# "final_approach_and_pick_20251030_130354",
-# "final_approach_and_pick_20251030_130656",
-# "final_approach_and_pick_20251030_130808",
-# "final_approach_and_pick_20251030_130932",
-# "final_approach_and_pick_20251030_131112",
-# "final_approach_and_pick_20251030_131440",
-# "final_approach_and_pick_20251030_131700",
-# "final_approach_and_pick_20251030_131808",
-# "final_approach_and_pick_20251030_132329",
-# "final_approach_and_pick_20251030_132747",
-# "final_approach_and_pick_20251030_132850",
-# "final_approach_and_pick_20251030_133135",
-# "final_approach_and_pick_20251030_133243",
-# "final_approach_and_pick_20251030_133504",
-# "final_approach_and_pick_20251030_133640",
-# "final_approach_and_pick_20251030_133814",
-# "final_approach_and_pick_20251030_134038",
-# "final_approach_and_pick_20251030_134512",
-# "final_approach_and_pick_20251030_135117",
-# "final_approach_and_pick_20251030_135343",
-# "final_approach_and_pick_20251030_135620",
-# "final_approach_and_pick_20251030_135801",
-# "final_approach_and_pick_20251030_135929",
-# "final_approach_and_pick_20251030_140049",
-# "final_approach_and_pick_20251030_140219",
-# "final_approach_and_pick_20251030_140350",
-# "final_approach_and_pick_20251030_140546",
-# "final_approach_and_pick_20251030_140742",
-# "final_approach_and_pick_20251030_140900",
-# "final_approach_and_pick_20251030_141836",
-# "final_approach_and_pick_20251030_142154",
-# "final_approach_and_pick_20251030_142303",
-# "final_approach_and_pick_20251030_142419",
-# "final_approach_and_pick_20251030_142918",
-# "final_approach_and_pick_20251030_143031",
-# "final_approach_and_pick_20251030_143452",
-# "final_approach_and_pick_20251030_143657",
-# "final_approach_and_pick_20251030_143827",
-# "final_approach_and_pick_20251030_144444",
-# "final_approach_and_pick_20251030_144548",
-# "final_approach_and_pick_20251030_144845",
-# "final_approach_and_pick_20251030_145001",
-# "final_approach_and_pick_20251030_145507",
-# "final_approach_and_pick_20251030_145700",
-# "final_approach_and_pick_20251030_150019",
-# "final_approach_and_pick_20251030_150803"]
-# # print(f"files len: {len(successful_bag_files)}")
+successful_bag_files = ["final_approach_and_pick_20251028_143901",
+"final_approach_and_pick_20251028_171000",
+"final_approach_and_pick_20251028_171431",
+"final_approach_and_pick_20251029_164443",
+"final_approach_and_pick_20251029_164729",
+"final_approach_and_pick_20251029_165334",
+"final_approach_and_pick_20251029_170049",
+"final_approach_and_pick_20251029_170153",
+"final_approach_and_pick_20251029_170659",
+"final_approach_and_pick_20251029_170813",
+"final_approach_and_pick_20251029_171431",
+"final_approach_and_pick_20251029_171756",
+"final_approach_and_pick_20251029_171959",
+"final_approach_and_pick_20251029_172251",
+"final_approach_and_pick_20251029_172622",
+"final_approach_and_pick_20251029_173433",
+"final_approach_and_pick_20251029_173557",
+"final_approach_and_pick_20251029_173742",
+"final_approach_and_pick_20251029_174813",
+"final_approach_and_pick_20251029_174943",
+"final_approach_and_pick_20251029_175156",
+"final_approach_and_pick_20251029_175542",
+"final_approach_and_pick_20251029_175730",
+"final_approach_and_pick_20251029_180355",
+"final_approach_and_pick_20251029_180549",
+"final_approach_and_pick_20251030_115312",
+"final_approach_and_pick_20251030_130354",
+"final_approach_and_pick_20251030_130656",
+"final_approach_and_pick_20251030_130808",
+"final_approach_and_pick_20251030_130932",
+"final_approach_and_pick_20251030_131112",
+"final_approach_and_pick_20251030_131440",
+"final_approach_and_pick_20251030_131700",
+"final_approach_and_pick_20251030_131808",
+"final_approach_and_pick_20251030_132329",
+"final_approach_and_pick_20251030_132747",
+"final_approach_and_pick_20251030_132850",
+"final_approach_and_pick_20251030_133135",
+"final_approach_and_pick_20251030_133243",
+"final_approach_and_pick_20251030_133504",
+"final_approach_and_pick_20251030_133640",
+"final_approach_and_pick_20251030_133814",
+"final_approach_and_pick_20251030_134038",
+"final_approach_and_pick_20251030_134512",
+"final_approach_and_pick_20251030_135117",
+"final_approach_and_pick_20251030_135343",
+"final_approach_and_pick_20251030_135620",
+"final_approach_and_pick_20251030_135801",
+"final_approach_and_pick_20251030_135929",
+"final_approach_and_pick_20251030_140049",
+"final_approach_and_pick_20251030_140219",
+"final_approach_and_pick_20251030_140350",
+"final_approach_and_pick_20251030_140546",
+"final_approach_and_pick_20251030_140742",
+"final_approach_and_pick_20251030_140900",
+"final_approach_and_pick_20251030_141836",
+"final_approach_and_pick_20251030_142154",
+"final_approach_and_pick_20251030_142303",
+"final_approach_and_pick_20251030_142419",
+"final_approach_and_pick_20251030_142918",
+"final_approach_and_pick_20251030_143031",
+"final_approach_and_pick_20251030_143452",
+"final_approach_and_pick_20251030_143657",
+"final_approach_and_pick_20251030_143827",
+"final_approach_and_pick_20251030_144444",
+"final_approach_and_pick_20251030_144548",
+"final_approach_and_pick_20251030_144845",
+"final_approach_and_pick_20251030_145001",
+"final_approach_and_pick_20251030_145507",
+"final_approach_and_pick_20251030_145700",
+"final_approach_and_pick_20251030_150019",
+"final_approach_and_pick_20251030_150803"]
+# print(f"files len: {len(successful_bag_files)}")
 
-# successful_corresponding_pick_times = [16.12,
-# 10.34,
-# 12.12,
-# 11.46,
-# 5.64,
-# 5.15,
-# 7.76,
-# 9.96,
-# 7.26,
-# 12.49,
-# 5.88,
-# 14.47,
-# 14.1,
-# 19.04,
-# 18.08,
-# 9.05,
-# 16.4,
-# 4.91,
-# 10.76,
-# 5.64,
-# 11.36,
-# 4.64,
-# 13.61,
-# 4.72,
-# 8.5,
-# 4.12,
-# 8.35,
-# 2.64,
-# 7.21,
-# 8.23,
-# 7.42,
-# 4.21,
-# 8.35,
-# 10.54,
-# 9.93,
-# 7.11,
-# 8.7,
-# 4.19,
-# 10.61,
-# 11.55,
-# 5.73,
-# 4.09,
-# 14.85,
-# 8.05,
-# 4.46,
-# 4.42,
-# 10.7,
-# 3.29,
-# 3.95,
-# 3.68,
-# 6.36,
-# 8.11,
-# 8.5,
-# 7.12,
-# 10.14,
-# 5.51,
-# 4.35,
-# 4.99,
-# 3.35,
-# 11.56,
-# 9.29,
-# 6.52,
-# 4.8,
-# 1.91,
-# 7.51,
-# 8.38,
-# 5.85,
-# 5.65,
-# 10.47,
-# 9.9,
-# 4.26,
-# 8.44]
-# # print(f"times len: {len(successful_corresponding_pick_times)}")
+successful_corresponding_pick_times = [16.425,
+11.67,
+12.825,
+12.295,
+6.4375,
+5.8375,
+8.49,
+10.725,
+81.5075,
+13.3175,
+6.72,
+15.1975,
+13.4975,
+20.0275,
+19.055,
+9.7825,
+36.47,
+5.6975,
+11.605,
+6.4025,
+12.15,
+5.3525,
+14.245,
+5.33,
+36.51,
+4.7975,
+9.14,
+46.3125,
+7.96,
+8.8125,
+8.285,
+5.055,
+9.0175,
+11.2625,
+10.955,
+7.8725,
+9.435,
+4.9525,
+11.405,
+12.4275,
+6.5675,
+2.57,
+15.55,
+7.6975,
+5.2625,
+5.2975,
+11.575,
+4.195,
+4.9,
+4.5425,
+7.2575,
+9.02,
+9.27,
+7.9775,
+11.075,
+6.32,
+5.2175,
+5.9125,
+4.2525,
+12.4075,
+10.2475,
+7.3475,
+5.64,
+23.5925,
+8.3625,
+9.2425,
+6.7075,
+6.5775,
+12.0275,
+10.6625,
+5.425,
+9.465]
+# print(f"times len: {len(successful_corresponding_pick_times)}")
 
 # build mapping for quick lookup
-failed_map = dict(zip(failed_bag_files, failed_corresponding_slip_times))
-# successful_map = dict(zip(successful_bag_files, successful_corresponding_pick_times))
+# failed_map = dict(zip(failed_bag_files, failed_corresponding_slip_times))
+successful_map = dict(zip(successful_bag_files, successful_corresponding_pick_times))
 
 # helper: detect failed bag and return slip time or None
-def get_failed_slip_time(bag_path):
-    base = os.path.basename(str(bag_path))
-    for k, t in failed_map.items():
-        if k in base:
-            return t
-    return None
-
-# def get_successful_pick_time(bag_path):
+# def get_failed_slip_time(bag_path):
 #     base = os.path.basename(str(bag_path))
-#     for k, t in successful_map.items():
+#     for k, t in failed_map.items():
 #         if k in base:
 #             return t
 #     return None
+
+def get_successful_pick_time(bag_path):
+    base = os.path.basename(str(bag_path))
+    for k, t in successful_map.items():
+        if k in base:
+            return t
+    return None
 
 # ---------- helpers ----------
 def elapsed_time(time_array):
@@ -312,8 +312,8 @@ def db3_to_csv_f(folder_name):
         print("No force data found in the specified topic.")
         return None
 
-    slip_time = get_failed_slip_time(name)
-    # slip_time = get_successful_pick_time(name)
+    # slip_time = get_failed_slip_time(name)
+    slip_time = get_successful_pick_time(name)
 
     if slip_time is not None:
         # compute elapsed times
@@ -324,7 +324,8 @@ def db3_to_csv_f(folder_name):
         rows = []
         # append classification as last column: 0 for P (before slip_time), 2 for F (at/after)
         for i, r in enumerate(df):
-            cls = 3 if elapsed[i] < slip_time else 2 # CHANGE HERE TO MAKE 0 1 2 OR 3
+            # cls = classify_with_prefail_window(elapsed[i], slip_time, window=1.0)  # CHANGE HERE TO MAKE 0 1 2 OR 3
+            cls = classify_successful_pick(elapsed[i], slip_time)
             # sensor cols (Fx,Fy,Fz), secs, nsecs, classification appended as last column
             rows.append([r[0], r[1], r[2], r[3], r[4], cls])
         _write_csv_rows(out_path, rows)
@@ -354,8 +355,8 @@ def db3_to_csv_p(folder_name):
         print("No pressure data found in the specified topic.")
         return None
 
-    slip_time = get_failed_slip_time(name)
-    # slip_time = get_successful_pick_time(name)
+    # slip_time = get_failed_slip_time(name)
+    slip_time = get_successful_pick_time(name)
 
     if slip_time is not None:
         secs_arr = np.array([r[1] for r in df], dtype=float)
@@ -364,7 +365,8 @@ def db3_to_csv_p(folder_name):
         elapsed = total - total[0]
         rows = []
         for i, r in enumerate(df):
-            cls = 3 if elapsed[i] < slip_time else 2
+            # cls = classify_with_prefail_window(elapsed[i], slip_time, window=1.0)
+            cls = classify_successful_pick(elapsed[i], slip_time)
             # P, secs, nsecs, class appended last
             rows.append([r[0], r[1], r[2], cls])
         _write_csv_rows(out_path, rows)
@@ -393,8 +395,8 @@ def db3_to_csv_tof(folder_name):
         print("No TOF data found in this bag.")
         return None
 
-    slip_time = get_failed_slip_time(name)
-    # slip_time = get_successful_pick_time(name)
+    # slip_time = get_failed_slip_time(name)
+    slip_time = get_successful_pick_time(name)
     if slip_time is not None:
         secs_arr = np.array([r[1] for r in df], dtype=float)
         nsecs_arr = np.array([r[2] for r in df], dtype=float)
@@ -402,7 +404,8 @@ def db3_to_csv_tof(folder_name):
         elapsed = total - total[0]
         rows = []
         for i, r in enumerate(df):
-            cls = 3 if elapsed[i] < slip_time else 2
+            # cls = classify_with_prefail_window(elapsed[i], slip_time, window=1.0)
+            cls = classify_successful_pick(elapsed[i], slip_time)
             rows.append([r[0], r[1], r[2], cls])
         _write_csv_rows(out_path, rows)
     else:
@@ -437,8 +440,8 @@ def db3_to_csv_flex(folder_name):
     padded = [r + [np.nan] * (max_len - len(r)) for r in rows]
 
     # determine slip_time and build final rows with classification as last column
-    slip_time = get_failed_slip_time(name)
-    # slip_time = get_successful_pick_time(name)
+    # slip_time = get_failed_slip_time(name)
+    slip_time = get_successful_pick_time(name)
 
     # compute secs/nsecs arrays from padded rows
     secs_arr = np.array([r[0] for r in padded], dtype=float)
@@ -450,7 +453,8 @@ def db3_to_csv_flex(folder_name):
     for i, r in enumerate(padded):
         cls = 0
         if slip_time is not None:
-            cls = 3 if elapsed[i] < slip_time else 2
+            # cls = classify_with_prefail_window(elapsed[i], slip_time, window=1.0)
+            cls = classify_successful_pick(elapsed[i], slip_time)
         # append classification as last column
         final_rows.append(r + [cls])
 
@@ -676,6 +680,25 @@ def picking_type_classifier_f_any(force, pressure, tof, flex,
         force_change_threshold=force_change_th
     )
 
+def classify_with_prefail_window(elapsed_t, slip_time, window=1.0):
+    if slip_time is None:
+        return 0
+    if slip_time - window <= elapsed_t < slip_time:
+        return 3        # 1s pre-failure
+    elif elapsed_t >= slip_time:
+        return 2        # failure
+    else:
+        return 0        # normal
+
+def classify_successful_pick(elapsed_t, pick_time):
+    """Return 0 before pick, 1 at/after pick."""
+    if pick_time is None:
+        return 0
+    elif elapsed_t >= pick_time:
+        return 1    # picked
+    else:
+        return 0    # still picking
+
 def process_file_and_graph_pick_analysis(filename, pressure_threshold, force_threshold, force_change_threshold, tof_threshold, flex_threshold):
     raw_f_arr, f_arr, etime_force, force_class = return_force_array(filename)
     p_arr, etimes_pressure, _ = return_pressure_array(filename)
@@ -774,10 +797,10 @@ def process_file_and_graph_pick_analysis(filename, pressure_threshold, force_thr
     # print(f"etime_force len: {len(etime_force)}, force_class len: {len(force_class)}")
     print(f"force_class unique values: {np.unique(force_class)}")
         
-    plt.suptitle(f"Bag: {filename}\nPick Classification: {pick_type}\n(Actual Classification: Failed) ", fontsize=16)
-    # plt.suptitle(f"Bag: {filename}\nPick Classification: {pick_type}\n(Actual Classification: Successful) ", fontsize=16)
+    # plt.suptitle(f"Bag: {filename}\nPick Classification: {pick_type}\n(Actual Classification: Failed) ", fontsize=16)
+    plt.suptitle(f"Bag: {filename}\nPick Classification: {pick_type}\n(Actual Classification: Successful) ", fontsize=16)
     plt.tight_layout(rect=[0, 0, 0.95, 0.95])
     # plt.show()
 
-    # print(f"\nBag: {filename}\nPick Classification: {pick_type}\n(Actual Classification: Successful) ")
-    print(f"\nBag: {filename}\nPick Classification: {pick_type}\n(Actual Classification: Failed) ")
+    print(f"\nBag: {filename}\nPick Classification: {pick_type}\n(Actual Classification: Successful) ")
+    # print(f"\nBag: {filename}\nPick Classification: {pick_type}\n(Actual Classification: Failed) ")

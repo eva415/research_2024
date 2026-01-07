@@ -202,10 +202,10 @@ def parallel_line_plot(directory_path, pdf_title):
     return None
 
 if __name__ == '__main__':
-    # bag_directory = "/home/imml/Desktop/successful_picks"
-    bag_directory = "/home/imml/Desktop/failed_picks"
-    pdf_title = "fail_test.pdf"
-    # pdf_title = "success_test.pdf"
+    bag_directory = "/home/imml/Desktop/successful_picks"
+    # bag_directory = "/home/imml/Desktop/failed_picks"
+    # pdf_title = "fail_test_jan_7.pdf"
+    pdf_title = "success_test_jan_7.pdf"
 
     loop_through_directory_save_plots(bag_directory, pdf_title)
     # graph_all_forces(bag_directory, pdf_title)
