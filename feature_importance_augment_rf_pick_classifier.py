@@ -12,6 +12,20 @@ from matplotlib.colors import to_rgb
 import pandas as pd
 from sklearn.inspection import permutation_importance
 import seaborn as sns
+import matplotlib as mpl
+from matplotlib.patches import Patch
+
+
+
+mpl.rcParams.update({
+    "font.size": 20,            # base font size
+    "axes.titlesize": 22,
+    "axes.labelsize": 20,
+    "xtick.labelsize": 16,
+    "ytick.labelsize": 16,
+    "legend.fontsize": 16,
+    "figure.titlesize": 24,
+    "lines.linewidth": 3,})
 
 STEP_SIZE = 5
 WINDOW_SIZE = 5
@@ -318,7 +332,7 @@ def plot_bag_file(filename, split="UNKNOWN", clf=None, window_size=WINDOW_SIZE, 
             break
 
     # ---- Plot signals ----
-    fig, axs = plt.subplots(4, 1, figsize=(12,8), sharex=True)
+    fig, axs = plt.subplots(4, 1, figsize=(14,8), sharex=True)
 
     # ---- NEW: window shading (green = correct, red = wrong) ----
     if clf:
@@ -367,19 +381,47 @@ def plot_bag_file(filename, split="UNKNOWN", clf=None, window_size=WINDOW_SIZE, 
     else:
         true_label_str = "Non-terminal"
 
-    suptitle_str = f"{os.path.basename(filename)}   [{split}]\nTrue label: {true_label_str}"
+    suptitle_str = f"True pick label: {true_label_str}"
     if true_pick_idx is not None:
         suptitle_str += f" | True pick time: {etime_force[true_pick_idx]:.2f}s"
     if first_pick_idx is not None:
-        suptitle_str += f"\nRF label: {true_label_str} | RF pick time: {predicted_pick_time:.2f}s"
+        suptitle_str += f"\nRF pick label: {true_label_str} | RF pick time: {predicted_pick_time:.2f}s"
     else:
-        suptitle_str += "\nRF label: Unclassified | RF pick time: NONE"
-    fig.suptitle(suptitle_str, fontsize=14)
+        suptitle_str += "\nRF pick label: Unclassified | RF pick time: NONE"
+    fig.suptitle(suptitle_str, fontsize=22)
 
+    # --- Legend proxy handles ---
+    legend_handles = []
+
+    # Line handles (already in your code)
+    if true_pick_idx is not None:
+        legend_handles.append(
+            plt.Line2D([0], [0], color='black', linestyle='--', linewidth=2,
+                    label="True pick/slip time")
+        )
+
+    if first_pick_idx is not None:
+        color = 'green' if first_pick_val == STATE_SUCCESS else 'red'
+        legend_handles.append(
+            plt.Line2D([0], [0], color=color, linestyle=':', linewidth=2,
+                    label="Predicted pick/slip time")
+        )
+
+    # --- NEW: window shading handles ---
+    legend_handles.extend([
+        Patch(facecolor='green', alpha=0.15, label='Correct classification'),
+        Patch(facecolor='red',   alpha=0.15, label='Incorrect classification')
+    ])
     if legend_handles:
-        fig.legend(legend_handles,
-                   ["True pick/slip time", "Predicted pick/slip time"],
-                   loc='upper right')
+        fig.legend(
+            handles=legend_handles,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 0.88),
+            ncol=4,
+            frameon=False
+        )
+
+
 
     plt.tight_layout(rect=[0,0,1,0.96])
     # plt.show()
@@ -497,11 +539,14 @@ if __name__ == "__main__":
     # --- Plot heatmap: state vs sensor ---
     plt.figure(figsize=(6,4))
     sns.heatmap(state_sensor_importance, annot=True, cmap="coolwarm")
-    plt.title("Sensor Feature Importance by State (Permutation Importance)")
-    plt.xlabel("State")
-    plt.ylabel("Sensor")
+    plt.title("Sensor Feature Importance by State\n(RF, Permutation Importance)", fontsize=14)
+    plt.xlabel("State", fontsize=14)
+    plt.ylabel("Sensor", fontsize=14)
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
     plt.tight_layout()
-    plt.show()
+    # plt.show()
+
 
     # ---------- EVALUATION ----------
     y_pred = clf.predict(X_test)
@@ -526,8 +571,8 @@ if __name__ == "__main__":
     ax.figure.colorbar(im, ax=ax)
 
     ax.set_title("Confusion Matrix (Test Set)")
-    ax.set_xlabel("Predicted Label")
-    ax.set_ylabel("True Label")
+    ax.set_xlabel("Predicted Pick Label")
+    ax.set_ylabel("True Pick Label")
 
     ax.set_xticks(np.arange(cm.shape[1]))
     ax.set_yticks(np.arange(cm.shape[0]))
@@ -536,7 +581,7 @@ if __name__ == "__main__":
     ax.set_yticklabels(label_names)
 
     plt.tight_layout()
-    plt.show()
+    # plt.show()
 
     # Generate PDF plots
     pdf_name = "AUG_RF_fpft_10.pdf" # REPLACE HERE

@@ -32,6 +32,17 @@ from feature_importance_augment_rf_pick_classifier import (
     return_flex_array,
     plot_bag_file
 )
+import matplotlib as mpl
+
+mpl.rcParams.update({
+    "font.size": 20,            # base font size
+    "axes.titlesize": 22,
+    "axes.labelsize": 20,
+    "xtick.labelsize": 16,
+    "ytick.labelsize": 16,
+    "legend.fontsize": 16,
+    "figure.titlesize": 24,
+    "lines.linewidth": 3,})
 
 STEP_SIZE = 5
 WINDOW_SIZE = 5
@@ -169,13 +180,25 @@ if __name__ == "__main__":
 
     # ----- Heatmap -----
     plt.figure(figsize=(6,4))
-    sns.heatmap(state_sensor_importance, annot=True, cmap="coolwarm", center=0)
-    plt.title("Sensor Feature Importance by State (MLP, Permutation)")
-    plt.xlabel("State")
-    plt.ylabel("Sensor")
-    plt.tight_layout()
-    plt.show()
+    sns.heatmap(
+        state_sensor_importance,
+        annot=True,
+        cmap="coolwarm",
+        center=0,
+        annot_kws={"size": 12}
+    )
 
+    plt.title(
+        f"Sensor Feature Importance by State\n(MLP, Permutation Importance)",
+        fontsize=22
+    )
+    plt.xlabel("State", fontsize=14)
+    plt.ylabel("Sensor", fontsize=14)
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
+
+    plt.tight_layout()
+    # plt.show()
 
     # ----- Evaluation -----
     y_pred = clf.predict(X_test)
